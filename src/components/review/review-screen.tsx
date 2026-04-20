@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type {
   Campaign,
   Example,
@@ -59,29 +59,25 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
   const drafts = useCampaignStore((s) => s.drafts);
   const examplesByService = useCampaignStore((s) => s.examplesByService);
   const loading = useCampaignStore((s) => s.loading);
-  const storedCampaignId = useCampaignStore((s) => s.campaignId);
 
-  const setCampaign = useCampaignStore((s) => s.setCampaign);
-  const setLoading = useCampaignStore((s) => s.setLoading);
-  const addToPool = useCampaignStore((s) => s.addToPool);
-  const addDraft = useCampaignStore((s) => s.addDraft);
-  const reset = useCampaignStore((s) => s.reset);
   const setRender = useCampaignStore((s) => s.setRender);
 
   const activeDraft = activeId ? drafts[activeId] : null;
+  const loadedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (storedCampaignId === campaignId) return;
-    let cancelled = false;
+    if (loadedRef.current === campaignId) return;
+    loadedRef.current = campaignId;
+    const store = useCampaignStore.getState();
+    store.reset();
+    store.setLoading(true);
+
     (async () => {
-      reset();
-      setLoading(true);
       try {
         const cRes = await fetch(`/api/dummy/sql/campaigns/${campaignId}`);
         if (!cRes.ok) return;
         const c = (await cRes.json()) as Campaign;
-        if (cancelled) return;
-        setCampaign(c);
+        store.setCampaign(c);
 
         const rRes = await fetch(`/api/dummy/sql/recipients?limit=100`);
         if (!rRes.ok) return;
@@ -89,7 +85,6 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
         const recipients = rData.items.filter((r) =>
           c.recipientIds.includes(r.id)
         );
-        if (cancelled) return;
 
         let pinnedExampleId: number | undefined;
         if (c.origin === "item" && c.itemRef) {
@@ -103,7 +98,7 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
             );
             if (pinItem) {
               pinnedExampleId = pinItem.id;
-              addToPool(c.itemRef.service, [pinItem]);
+              useCampaignStore.getState().addToPool(c.itemRef.service, [pinItem]);
             }
           }
         }
@@ -127,11 +122,11 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
               return { svc, items: data.items };
             })
           );
-          if (cancelled) return;
 
           const draft = buildEmptyDraft(rec);
+          const api = useCampaignStore.getState();
           for (const { svc, items } of matchingResults) {
-            addToPool(svc, items);
+            api.addToPool(svc, items);
             let ids = items.slice(0, DEFAULT_N).map((it) => it.id);
             if (
               pinnedExampleId !== undefined &&
@@ -142,24 +137,13 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
             }
             draft.selectedExamples[svc] = ids;
           }
-          addDraft(draft);
+          api.addDraft(draft);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        useCampaignStore.getState().setLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    campaignId,
-    storedCampaignId,
-    reset,
-    setCampaign,
-    setLoading,
-    addToPool,
-    addDraft,
-  ]);
+  }, [campaignId]);
 
   const renderKey = useMemo(() => {
     if (!activeDraft) return "";
