@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { TopNav } from "@/components/top-nav";
+import { LatestCampaigns } from "@/components/latest-campaigns";
 
 export default function DashboardPage() {
   return (
@@ -53,8 +54,8 @@ export default function DashboardPage() {
               Alle ansehen
             </Link>
           </div>
-          <div className="mt-3 rounded-lg border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">
-            Noch keine Kampagnen vorhanden.
+          <div className="mt-3">
+            <LatestCampaigns limit={5} />
           </div>
         </section>
       </main>
