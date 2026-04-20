@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: oklch(0.54 0.2 255);
+}
+
+html,
+body {
+  height: 100%;
+}
