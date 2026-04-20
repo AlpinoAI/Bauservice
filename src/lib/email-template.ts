@@ -2,7 +2,7 @@ import { convert as htmlToText } from "html-to-text";
 import type { Example, RenderPayload, Service } from "@/lib/types";
 import { servicesOrder } from "@/lib/filter-options";
 
-const TEMPLATE_VERSION = "v2";
+const TEMPLATE_VERSION = "v3";
 
 const serviceLabelDe: Record<Service, string> = {
   ausschreibungen: "Aktuelle Ausschreibungen",
@@ -21,18 +21,21 @@ const serviceLabelIt: Record<Service, string> = {
 const defaults = {
   de: {
     preview: "Aktuelle Informationen aus dem Bauservice-Netzwerk",
-    salutation: "Sehr geehrte Damen und Herren,",
-    intro: "nachfolgend eine persönliche Auswahl passender Informationen für Sie.",
+    intro:
+      "nachfolgend eine persönliche Auswahl passender Informationen für Sie.",
     cta: "Für weitere Details kontaktieren Sie uns gerne.",
     footer: "Bauservice KG · Brixen",
+    salutationPrefix: "Sehr geehrte Damen und Herren bei",
+    salutationFallback: "Sehr geehrte Damen und Herren,",
   },
   it: {
     preview: "Informazioni aggiornate dalla rete Bauservice",
-    salutation: "Gentile cliente,",
     intro:
       "di seguito trovate una selezione personalizzata basata sui vostri interessi.",
     cta: "Contattateci per ulteriori informazioni.",
     footer: "Bauservice KG · Bressanone",
+    salutationPrefix: "Gentili signori di",
+    salutationFallback: "Gentili signori,",
   },
 } as const;
 
@@ -48,38 +51,106 @@ function describe(it: Example, sprache: "de" | "it"): string {
   return sprache === "it" ? it.beschreibungIt : it.beschreibungDe;
 }
 
+function formatCurrency(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function exampleMeta(
+  it: Example,
+  sprache: "de" | "it"
+): { label: string; value: string }[] {
+  const locale = sprache === "it" ? "it-IT" : "de-DE";
+  const meta: { label: string; value: string }[] = [];
+  if (it.datum) {
+    meta.push({
+      label: sprache === "it" ? "Data" : "Datum",
+      value: it.datum,
+    });
+  }
+  if (it.bezirk) {
+    meta.push({
+      label: sprache === "it" ? "Zona" : "Bezirk",
+      value: it.bezirk,
+    });
+  }
+  if ("betrag" in it && typeof it.betrag === "number") {
+    meta.push({
+      label: sprache === "it" ? "Importo" : "Betrag",
+      value: formatCurrency(it.betrag, locale),
+    });
+  }
+  if (it.gewerk) {
+    meta.push({
+      label: sprache === "it" ? "Categoria" : "Gewerk",
+      value: it.gewerk,
+    });
+  }
+  return meta;
+}
+
+function buildExampleCard(it: Example, sprache: "de" | "it"): string {
+  const meta = exampleMeta(it, sprache);
+  const metaRow = meta.length
+    ? `<div style="margin-bottom:6px;font-size:12px;color:#64748b;">${meta
+        .map(
+          (m) =>
+            `<span style="display:inline-block;margin-right:14px;"><strong style="color:#475569;">${escape(m.label)}:</strong> ${escape(m.value)}</span>`
+        )
+        .join("")}</div>`
+    : "";
+  return `
+      <tr>
+        <td style="padding:6px 0 10px 0;">
+          <div style="border-left:3px solid #2563eb;padding:10px 14px;background:#f8fafc;border-radius:4px;">
+            ${metaRow}
+            <div style="font-size:14px;line-height:1.55;color:#0f172a;">${escape(describe(it, sprache))}</div>
+          </div>
+        </td>
+      </tr>`;
+}
+
 function buildSection(
   label: string,
   items: Example[],
   sprache: "de" | "it"
 ): string {
   if (items.length === 0) return "";
-  const rows = items
-    .map(
-      (it) => `
-      <tr>
-        <td style="padding:6px 0;color:#334155;font-size:14px;line-height:1.55;vertical-align:top;">
-          <span style="display:inline-block;width:6px;height:6px;background:#2563eb;border-radius:50%;margin-right:10px;vertical-align:middle;"></span>${escape(describe(it, sprache))}
-        </td>
-      </tr>`
-    )
-    .join("");
+  const cards = items.map((it) => buildExampleCard(it, sprache)).join("");
   return `
     <tr>
-      <td style="padding-top:22px;font-size:15px;font-weight:600;color:#0f172a;letter-spacing:-0.01em;">${escape(label)}</td>
+      <td style="padding-top:24px;padding-bottom:8px;font-size:15px;font-weight:600;color:#0f172a;letter-spacing:-0.01em;">${escape(label)}</td>
     </tr>
     <tr>
       <td>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-          ${rows}
+          ${cards}
         </table>
       </td>
     </tr>`;
 }
 
+function buildSalutation(
+  payload: RenderPayload["payload"],
+  sprache: "de" | "it"
+): string {
+  const override = payload.overrides?.salutation;
+  if (override) return escape(override);
+  const d = defaults[sprache];
+  const recipient =
+    sprache === "it" ? payload.recipient.nameIt : payload.recipient.nameDe;
+  if (recipient && recipient.trim().length > 0) {
+    return `${escape(d.salutationPrefix)} <strong>${escape(recipient)}</strong>,`;
+  }
+  return escape(d.salutationFallback);
+}
+
 function buildHtml(payload: RenderPayload["payload"], sprache: "de" | "it"): string {
   const d = defaults[sprache];
-  const salutation = escape(payload.overrides?.salutation || d.salutation);
+  const salutation = buildSalutation(payload, sprache);
   const intro = escape(payload.overrides?.intro || d.intro);
   const cta = escape(payload.overrides?.cta || d.cta);
   const labels = sprache === "it" ? serviceLabelIt : serviceLabelDe;

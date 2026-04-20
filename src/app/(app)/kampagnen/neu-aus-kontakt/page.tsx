@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { TopNav } from "@/components/top-nav";
 import { RecipientPicker } from "@/components/recipient-picker";
 import { Button } from "@/components/ui/button";
 
@@ -38,9 +37,7 @@ export default function NeuAusKontaktPage() {
   }
 
   return (
-    <>
-      <TopNav />
-      <main className="mx-auto max-w-6xl px-6 py-10">
+    <main className="mx-auto w-full max-w-6xl px-8 py-8">
         <header className="mb-6">
           <div className="text-xs font-medium uppercase tracking-wide text-blue-600">
             Richtung A · Schritt 1
@@ -79,7 +76,6 @@ export default function NeuAusKontaktPage() {
             </Button>
           </div>
         </div>
-      </main>
-    </>
+    </main>
   );
 }

@@ -21,11 +21,29 @@ function gewerkFor(recipient: Recipient): string[] {
   return recipientGewerkHints[recipient.id] ?? [];
 }
 
-function score(gewerkMatch: boolean, regionMatch: boolean): number {
+function scoreValue(gewerkMatch: boolean, regionMatch: boolean): number {
   if (gewerkMatch && regionMatch) return 0.88 + Math.random() * 0.1;
   if (gewerkMatch) return 0.7 + Math.random() * 0.15;
   if (regionMatch) return 0.5 + Math.random() * 0.15;
   return 0.25 + Math.random() * 0.2;
+}
+
+function reasonText(
+  gewerkMatch: boolean,
+  regionMatch: boolean,
+  gewerk?: string,
+  bezirk?: string
+): string {
+  if (gewerkMatch && regionMatch) {
+    return `Passend zu Gewerk ${gewerk} und Bezirk ${bezirk}`;
+  }
+  if (gewerkMatch) {
+    return `Gleiches Gewerk (${gewerk}), anderer Bezirk`;
+  }
+  if (regionMatch) {
+    return `Gleicher Bezirk (${bezirk}), anderes Gewerk`;
+  }
+  return "Nur nach Aktualität sortiert";
 }
 
 export function matchExamplesForRecipient(
@@ -45,7 +63,11 @@ export function matchExamplesForRecipient(
       : false;
     const regionMatch =
       !!recipient.bezirkDe && recipient.bezirkDe === item.bezirk;
-    return { ...item, score: Number(score(gewerkMatch, regionMatch).toFixed(3)) };
+    return {
+      ...item,
+      score: Number(scoreValue(gewerkMatch, regionMatch).toFixed(3)),
+      reason: reasonText(gewerkMatch, regionMatch, item.gewerk, item.bezirk),
+    };
   });
 
   return scored.sort((a, b) => b.score - a.score).slice(0, n);
@@ -73,7 +95,11 @@ export function matchRecipientsForItem(
     const gewerkeRec = gewerkFor(r);
     const gewerkMatch = item.gewerk ? gewerkeRec.includes(item.gewerk) : false;
     const regionMatch = !!r.bezirkDe && r.bezirkDe === item.bezirk;
-    return { ...r, score: Number(score(gewerkMatch, regionMatch).toFixed(3)) };
+    return {
+      ...r,
+      score: Number(scoreValue(gewerkMatch, regionMatch).toFixed(3)),
+      reason: reasonText(gewerkMatch, regionMatch, item.gewerk, item.bezirk),
+    };
   });
 
   return scored.sort((a, b) => b.score - a.score).slice(0, n);

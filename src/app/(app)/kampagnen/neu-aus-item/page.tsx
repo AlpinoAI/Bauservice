@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { TopNav } from "@/components/top-nav";
 import { ItemPicker } from "@/components/item-picker";
 import { Button } from "@/components/ui/button";
 import { serviceLabels } from "@/lib/filter-options";
@@ -59,9 +58,7 @@ export default function NeuAusItemPage() {
   }
 
   return (
-    <>
-      <TopNav />
-      <main className="mx-auto max-w-6xl px-6 py-10">
+    <main className="mx-auto w-full max-w-6xl px-8 py-8">
         <header className="mb-6">
           <div className="text-xs font-medium uppercase tracking-wide text-blue-600">
             Richtung B · Schritt 1
@@ -95,7 +92,6 @@ export default function NeuAusItemPage() {
             </Button>
           </div>
         </div>
-      </main>
-    </>
+    </main>
   );
 }

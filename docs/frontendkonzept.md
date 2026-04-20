@@ -1,6 +1,6 @@
 # Frontendkonzept — Bauservice Email-Automation
 
-**Session 1 · 2026-04-20 · Status: Entwurf, Rev 2 nach Scope-Alignment**
+**Session 1 · 2026-04-20 · Status: Entwurf, Rev 3 inkl. Phase-1.5-Erweiterung**
 
 Dieses Dokument beschreibt das Zielbild des Next.js-Frontends für die AI-Powered Email-Automation von Bauservice. Es klärt Seitenstruktur, Komponenten-Inventar, State-Management, Integrationspunkte und offene Fragen, damit die Implementierung auf einer geteilten Grundlage starten kann. Implementiert wird später — heute nur Konzept.
 
@@ -27,6 +27,17 @@ Bauservice ist ein kleiner Kunde (3.900 EUR einmalig + 65 EUR/Monat, 6 Wochen, 1
 - Kampagnen-Liste mit zwei Zuständen: `draft`, `sent`.
 - Magic-Link-Login für Bauservice-Mitarbeiter, keine Rollentrennung.
 - Deployment auf Vercel (EU-Region) mit Custom Domain.
+
+**Phase-1.5-Erweiterungen (nach MVP-Abgleich, implementiert):**
+- **Sidebar-Navigation** (Dashboard, Kontakte, Kampagnen, Services, Analytics) statt Top-Nav.
+- **`/services`** als eine Tabelle mit Service-Filter-Tabs (statt vier getrennter Service-Routen).
+- **Dashboard-KPIs** + Schnellzugriff-Widget.
+- **Personalisierter Anrede** aus `Kontakte.Kontakt_full_name_D/_I` (Firmennamen-basiert, da keine Ansprechpartner-Felder im Schema).
+- **Mail-Client-Header** (Von / An / Betreff) als Preview-UX oberhalb des Render-iframes.
+- **Strukturierte Example-Cards** im Template (Datum, Bezirk, Betrag, Gewerk als Meta-Zeile).
+- **Matching-Score + Begründungstext** ("Passend zu Gewerk X und Bezirk Y") in Swap-Sheet und Review-Cards, Score als farbiger Progress-Bar.
+- **Feedback-Loop**: „Passt" / „Passt nicht" pro Example mit `POST /api/dummy/feedback` (in-memory Logger, wird in Phase 2 für ML-Training persistiert).
+- **`/analytics`** als Placeholder — echtes Tracking folgt in Phase 2.
 
 **Explizit NICHT in Phase 1 (Phase 2 oder später):**
 - Settings-Bereich im Frontend (Templates, Service-Defaults, Nutzerverwaltung) — Templates und Defaults liegen als Files/Konstanten im Repo und werden per PR geändert.
@@ -73,33 +84,41 @@ Kampagnen werden innerhalb einer Session gehalten; persistente Draft-Wiederaufna
 
 ```
 app/
-  layout.tsx                          # Auth-Guard, Top-Nav, Toaster
-  page.tsx                            # Dashboard: zwei Start-CTAs + letzte Kampagnen
+  layout.tsx                          # Root Layout (html/body, Auth-Guard)
 
   (auth)/
-    login/page.tsx                    # Magic-Link-Login
+    login/page.tsx                    # Magic-Link-Login (kein AppShell)
 
-  kampagnen/
-    page.tsx                          # Übersicht: draft · sent
-    neu-aus-kontakt/page.tsx          # Richtung A — Kontakt-Suche (gezielt)
-    neu-aus-item/page.tsx             # Richtung B — neue Items chronologisch (Browsing)
-    [id]/
-      page.tsx                        # Review: Draft + Individual-Editing
-      versand/page.tsx                # Approve & Send
-
-  empfaenger/
-    page.tsx                          # Liste + Suche (read-only, aus VectorDB_Kontakte)
-    [id]/page.tsx                     # Empfänger-Detail (Profil, letzte Kampagnen)
+  (app)/                              # Route-Group für authentifizierte App
+    layout.tsx                        # AppShell mit Sidebar-Nav
+    page.tsx                          # Dashboard: KPIs + Schnellzugriff + letzte Kampagnen
+    empfaenger/
+      page.tsx                        # Kontakte (read-only, aus VectorDB_Kontakte)
+      [id]/page.tsx                   # Empfänger-Detail (Phase 2)
+    kampagnen/
+      page.tsx                        # Übersicht: Alle · Entwurf · Versandt
+      neu-aus-kontakt/page.tsx        # Richtung A — Kontakt-Suche (gezielt)
+      neu-aus-item/page.tsx           # Richtung B — neue Items chronologisch
+      [id]/
+        page.tsx                      # Review: Draft + Individual-Editing
+        versand/page.tsx              # Approve & Send
+    services/
+      page.tsx                        # Eine Tabelle + Service-Filter-Tabs
+    analytics/
+      page.tsx                        # Placeholder, Tracking kommt in Phase 2
 
   api/
+    auth/login|logout/route.ts        # Basic-Auth-Stub (Phase 2: Magic-Link)
     dummy/
-      matching/examples/route.ts      # POST — für Richtung A: passende Items zu Kontakt
-      matching/recipients/route.ts    # POST — für Richtung B: passende Kontakte zu Item
-      sql/recipients/route.ts         # GET — Empfängerstammdaten
-      sql/items/route.ts              # GET — Items aller 4 Services (für Picker in Richtung B)
-      sql/campaigns/route.ts          # GET/POST — Kampagnen (Liste + Create)
-      render/mjml/route.ts            # POST — MJML → HTML (+ Plain-Text)
-      mailjet/send/route.ts           # POST — Versand-Trigger
+      matching/examples/route.ts      # POST — Richtung A: Items zu Kontakt (+ Score + Reason)
+      matching/recipients/route.ts    # POST — Richtung B: Kontakte zu Item (+ Score + Reason)
+      sql/recipients/route.ts         # GET — Empfängerstammdaten (Opt-out/Aktiv serverseitig gefiltert)
+      sql/items/route.ts              # GET — Items aller 4 Services
+      sql/campaigns/route.ts          # GET/POST — Kampagnen-Liste + Create
+      sql/campaigns/[id]/route.ts     # GET/PATCH — Einzel-Campaign, Status-Update draft→sent
+      render/mjml/route.ts            # POST — HTML + Plain-Text (inline-styled Template, kein MJML mehr)
+      mailjet/send/route.ts           # POST — Versand-Stub mit Opt-out-Re-Check
+      feedback/route.ts               # POST — „Passt"/„Passt nicht"-Feedback fürs ML-Training
 ```
 
 **Route-Gruppen:**
@@ -116,23 +135,21 @@ app/
 
 | Komponente | Zweck |
 |---|---|
-| `LayoutShell` | Top-Nav, Sidebar, Toaster, Auth-State-Kontext |
-| `DataTable` | Generische shadcn-Tabelle mit Sortierung, Filter, Pagination — für Empfänger, Kampagnen, Beispiele |
-| `SearchFilterBar` | Live-Suche + Filter-Chips auf allen DB-Dimensionen (Gewerk, Bezirk, Provinz, Rolle, Aktiv, Datum) + Ergebnis-Counter; identisches Pattern für Kontakte und Items |
-| `StatusBadge` | Farbkodierte Badges für Kampagnen-Status (Draft/Review/Versandt/Fehler) |
-| `EmptyState`, `LoadingState`, `ErrorState` | Standardisierte Placeholder |
+| `AppShell` | Sidebar-Navigation (Dashboard/Kontakte/Kampagnen/Services/Analytics), Logo, Logout |
+| `SearchFilterBar` | Live-Suche + Filter-Chips auf allen DB-Dimensionen + Ergebnis-Counter; identisches Pattern für Kontakte, Items, Services |
+| `Badge`, `ScoreBar` | Status-/Kategorien-Pills und farbiger Score-Progress-Bar (grün ≥80, amber ≥60) |
+| `DashboardKpis`, `LatestCampaigns` | KPI-Kacheln und Schnellzugriff fürs Dashboard |
 
 ### Feature-Komponenten (seitenspezifisch)
 
 | Komponente | Zweck | Flow |
 |---|---|---|
-| `RecipientPicker` | Multi-Select aus `VectorDB_Kontakte`, Live-Suche, Gewerk-/Region-/Rollen-Filter, Opt-out hart ausgeblendet | A + Review |
-| `ItemPicker` | Auswahl eines Items aus einer der 4 Service-Listen (Ausschreibung / Ergebnis / Projekt / Konzession), Service-Umschalter als Tabs | B |
+| `RecipientPicker` | Multi-Select aus `VectorDB_Kontakte`, Live-Suche, Gewerk-/Region-/Rollen-Filter, Segment-Toggle Neu/Bestand/Alle, Opt-out hart ausgeblendet | A + Review |
+| `ItemPicker` | Auswahl eines Items aus einer der 4 Service-Listen, Service-Umschalter als Tabs | B |
 | `ServicePanel` | Container für einen Service-Block (Titel, Anzahl, Inkludieren-Toggle) | Review |
-| `ExampleCard` | Einzelnes Beispiel mit Metadaten und "Austauschen"-Button | Review |
-| `ExampleSwapSheet` | Side-Sheet mit alternativen Beispielen zur Auswahl (Matching-API-Results) | Review |
-| `ServiceToggle` | Ein-/Ausblenden eines Service-Blocks im Email-Draft pro Empfänger | Review |
-| `EmailPreview` | Sandboxed iframe mit gerendertem HTML + Plain-Text-Toggle (Device-Size-Switch: Phase 2) | Review |
+| `ExampleCard` | Einzelnes Beispiel mit Metadaten (Betrag, Bezirk, Gewerk, Datum), Score-Bar, Begründung, "Passt/Passt nicht"-Feedback-Buttons sowie Austauschen/Entfernen | Review |
+| `ExampleSwapSheet` | Side-Sheet mit alternativen Beispielen, jeweils mit Score-Bar und Begründungstext | Review |
+| `EmailPreview` | Mail-Client-Header (Von/An/Betreff) oben, dann iframe mit gerendertem HTML + Plain-Text-Toggle | Review |
 | `EditableTextBlock` | Inline-editierbarer Textbereich für Anrede/Einleitung/CTA-Overrides | Review |
 | `ApprovalBar` | Sticky-Footer mit "Verwerfen" und "Versenden" | Review / Versand |
 
@@ -178,9 +195,10 @@ Alle Calls laufen in Phase 1 über stubbed API-Routen unter `app/api/dummy/*`. D
 | `POST /api/dummy/mailjet/send` | Frontend → Mailjet | `/kampagnen/[id]/versand` | `{ campaignId }` → `{ jobId, accepted, rejected? }` |
 
 **Wichtig für den Kontrakt mit Matthias (Matching/DB):**
-- Beide `matching/*`-Endpoints liefern einen **Relevanz-Score** (0–1) pro Treffer mit, damit der Review-Screen "bessere Beispiele" anbieten kann.
+- Beide `matching/*`-Endpoints liefern einen **Relevanz-Score** (0–1) und ein **`reason`-Feld** (menschenlesbare Begründung, z. B. "Passend zu Gewerk Tiefbau und Bezirk Eisacktal") pro Treffer mit. Der Score steuert Sortierung und UI-Progress-Bar, der Reason wird in `ExampleCard` + `ExampleSwapSheet` angezeigt.
 - Der **Opt-out- und Aktiv-Filter** wird serverseitig in den SQL- und Matching-Routen durchgesetzt, nicht erst im Frontend — das ist auch für das Versand-Audit relevant.
 - Die **Sprachauswahl** (`Kontakte.Sprache` = `'de'` | `'it'`) wird vom Frontend an `render/mjml` mitgegeben; welche `_D`/`_I`-Spalten geliefert werden, entscheidet die Matching-API basierend auf der Empfängersprache.
+- `POST /api/dummy/feedback` nimmt „Passt"/„Passt nicht"-Signale pro `{recipientId, service, exampleId}` entgegen. Phase 2 persistiert das in Matthias' ML-Trainings-Store.
 
 **Reale Tabellenstruktur (Snapshot 2026-04-20):**
 

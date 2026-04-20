@@ -7,7 +7,10 @@ import type {
   Recipient,
   Service,
   Sprache,
+  WithScore,
 } from "@/lib/types";
+
+export type PoolExample = WithScore<Example>;
 
 export type RecipientDraft = {
   recipientId: number;
@@ -23,7 +26,7 @@ type CampaignState = {
   campaignId: string | null;
   campaign: Campaign | null;
   drafts: Record<number, RecipientDraft>;
-  examplesByService: Record<Service, Example[]>;
+  examplesByService: Record<Service, PoolExample[]>;
   activeRecipientId: number | null;
   renderCache: Record<number, { html: string; text: string }>;
   isDirty: boolean;
@@ -57,7 +60,7 @@ type CampaignActions = {
     value: string
   ) => void;
   toggleSkip: (recipientId: number) => void;
-  addToPool: (service: Service, examples: Example[]) => void;
+  addToPool: (service: Service, examples: PoolExample[]) => void;
   setRender: (recipientId: number, html: string, text: string) => void;
   reset: () => void;
 };
@@ -80,7 +83,7 @@ const initialState: CampaignState = {
   campaignId: null,
   campaign: null,
   drafts: {},
-  examplesByService: emptyByService<Example>(),
+  examplesByService: emptyByService<PoolExample>(),
   activeRecipientId: null,
   renderCache: {},
   isDirty: false,

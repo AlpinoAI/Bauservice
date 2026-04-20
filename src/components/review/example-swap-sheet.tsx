@@ -6,6 +6,7 @@ import type { Example, Service, WithScore } from "@/lib/types";
 import { useCampaignStore } from "@/lib/campaign-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ScoreBar } from "@/components/ui/score-bar";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -109,19 +110,22 @@ export function ExampleSwapSheet({
                       "hover:border-blue-400 hover:bg-blue-50"
                     )}
                   >
-                    <div className="mb-1 flex items-center gap-2">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
                       {it.datum && (
                         <span className="text-xs text-zinc-500">{it.datum}</span>
                       )}
                       {it.bezirk && <Badge variant="neutral">{it.bezirk}</Badge>}
                       {it.gewerk && <Badge variant="blue">{it.gewerk}</Badge>}
-                      <Badge variant="green">
-                        Score {Math.round(it.score * 100)}
-                      </Badge>
+                      <ScoreBar value={it.score} className="ml-auto" />
                     </div>
                     <p>
                       {sprache === "it" ? it.beschreibungIt : it.beschreibungDe}
                     </p>
+                    {it.reason && (
+                      <p className="mt-1 text-xs italic text-zinc-500">
+                        Begründung: {it.reason}
+                      </p>
+                    )}
                   </button>
                 </li>
               ))}

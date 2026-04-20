@@ -10,7 +10,6 @@ import type {
 } from "@/lib/types";
 import { buildEmptyDraft, useCampaignStore } from "@/lib/campaign-store";
 import type { RecipientDraft } from "@/lib/campaign-store";
-import { TopNav } from "@/components/top-nav";
 import { Badge } from "@/components/ui/badge";
 import { RecipientTabs } from "./recipient-tabs";
 import { ServicePanel } from "./service-panel";
@@ -98,7 +97,9 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
             );
             if (pinItem) {
               pinnedExampleId = pinItem.id;
-              useCampaignStore.getState().addToPool(c.itemRef.service, [pinItem]);
+              useCampaignStore.getState().addToPool(c.itemRef.service, [
+                { ...pinItem, score: 1, reason: "Ursprungs-Item der Kampagne" },
+              ]);
             }
           }
         }
@@ -181,14 +182,11 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
 
   if (loading || !campaign) {
     return (
-      <>
-        <TopNav />
-        <main className="mx-auto max-w-7xl px-6 py-10">
-          <div className="rounded-lg border border-zinc-200 bg-white p-10 text-center text-sm text-zinc-500">
-            Lade Kampagne …
-          </div>
-        </main>
-      </>
+      <main className="mx-auto w-full max-w-7xl px-8 py-8">
+        <div className="rounded-lg border border-zinc-200 bg-white p-10 text-center text-sm text-zinc-500">
+          Lade Kampagne …
+        </div>
+      </main>
     );
   }
 
@@ -206,9 +204,8 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
   const toSend = list.filter((d) => !d.skip);
 
   return (
-    <>
-      <TopNav />
-      <div className="mx-auto max-w-7xl px-6 py-6 pb-24">
+    <div className="flex min-h-screen flex-col">
+      <div className="mx-auto w-full max-w-7xl px-8 py-6 pb-24">
         <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="mb-1 flex items-center gap-2">
@@ -262,6 +259,6 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
       </div>
 
       <ApprovalBar />
-    </>
+    </div>
   );
 }

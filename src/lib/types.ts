@@ -82,7 +82,7 @@ export type Example =
   | BeschlussExample
   | KonzessionExample;
 
-export type WithScore<T> = T & { score: number };
+export type WithScore<T> = T & { score: number; reason?: string };
 
 export type Campaign = {
   id: string;

@@ -3,7 +3,6 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { TopNav } from "@/components/top-nav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCampaignStore } from "@/lib/campaign-store";
@@ -42,14 +41,11 @@ export default function VersandPage({
 
   if (storeCampaignId !== id || !campaign) {
     return (
-      <>
-        <TopNav />
-        <main className="mx-auto max-w-5xl px-6 py-10">
-          <div className="rounded-lg border border-zinc-200 bg-white p-10 text-center text-sm text-zinc-500">
-            Lade Kampagne …
-          </div>
-        </main>
-      </>
+      <main className="mx-auto w-full max-w-5xl px-8 py-8">
+        <div className="rounded-lg border border-zinc-200 bg-white p-10 text-center text-sm text-zinc-500">
+          Lade Kampagne …
+        </div>
+      </main>
     );
   }
 
@@ -83,9 +79,7 @@ export default function VersandPage({
 
   if (result) {
     return (
-      <>
-        <TopNav />
-        <main className="mx-auto max-w-3xl px-6 py-10">
+      <main className="mx-auto w-full max-w-3xl px-8 py-8">
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-5">
             <div className="flex items-center gap-2">
               <Badge variant="green">Demo-Versand abgeschlossen</Badge>
@@ -131,15 +125,12 @@ export default function VersandPage({
               <Button variant="secondary">Zum Dashboard</Button>
             </Link>
           </div>
-        </main>
-      </>
+      </main>
     );
   }
 
   return (
-    <>
-      <TopNav />
-      <main className="mx-auto max-w-6xl px-6 py-8">
+    <main className="mx-auto w-full max-w-6xl px-8 py-8">
         <header className="mb-4 flex items-start justify-between">
           <div>
             <div className="mb-1 flex items-center gap-2">
@@ -239,7 +230,6 @@ export default function VersandPage({
             )}
           </div>
         </div>
-      </main>
-    </>
+    </main>
   );
 }

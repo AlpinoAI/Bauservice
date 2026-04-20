@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { TopNav } from "@/components/top-nav";
 import { Badge } from "@/components/ui/badge";
 import type { Campaign } from "@/lib/types";
 import { serviceLabels } from "@/lib/filter-options";
@@ -34,9 +33,7 @@ export default function KampagnenPage() {
   ];
 
   return (
-    <>
-      <TopNav />
-      <main className="mx-auto max-w-5xl px-6 py-10">
+    <main className="mx-auto w-full max-w-6xl px-8 py-8">
         <header className="mb-6 flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Kampagnen</h1>
@@ -131,7 +128,6 @@ export default function KampagnenPage() {
             </ul>
           )}
         </div>
-      </main>
-    </>
+    </main>
   );
 }

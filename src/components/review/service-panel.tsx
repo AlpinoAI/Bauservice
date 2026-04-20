@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { Plus } from "lucide-react";
-import type { Example, Service } from "@/lib/types";
-import { useCampaignStore } from "@/lib/campaign-store";
+import type { Service } from "@/lib/types";
+import { useCampaignStore, type PoolExample } from "@/lib/campaign-store";
 import { serviceLabels } from "@/lib/filter-options";
 import { ExampleCard } from "./example-card";
 import { ExampleSwapSheet } from "./example-swap-sheet";
@@ -27,9 +27,9 @@ export function ServicePanel({ recipientId, service, pinnedExampleId }: Props) {
 
   const enabled = draft.serviceEnabled[service];
   const selectedIds = draft.selectedExamples[service];
-  const selected: Example[] = selectedIds
+  const selected: PoolExample[] = selectedIds
     .map((id) => pool.find((e) => e.id === id))
-    .filter((e): e is Example => !!e);
+    .filter((e): e is PoolExample => !!e);
 
   return (
     <section
@@ -68,6 +68,10 @@ export function ServicePanel({ recipientId, service, pinnedExampleId }: Props) {
                 key={ex.id}
                 example={ex}
                 sprache={draft.sprache}
+                recipientId={recipientId}
+                service={service}
+                score={ex.score}
+                reason={ex.reason}
                 pinned={ex.id === pinnedExampleId}
                 onSwap={() => setSwapOpen(ex.id)}
                 onRemove={() => removeExample(recipientId, service, ex.id)}
