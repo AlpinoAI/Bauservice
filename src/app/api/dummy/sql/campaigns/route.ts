@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createCampaign, listCampaigns } from "@/lib/fixtures/campaigns";
+import type { Service } from "@/lib/types";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -14,8 +15,8 @@ export async function POST(req: Request) {
   const body = (await req.json()) as {
     name?: string;
     origin?: "recipient" | "item";
-    itemRef?: { service: string; itemId: number };
-    recipientCount?: number;
+    itemRef?: { service: Service; itemId: number };
+    recipientIds?: number[];
     createdBy?: string;
   };
 
@@ -30,8 +31,8 @@ export async function POST(req: Request) {
     name: body.name,
     origin: body.origin,
     status: "draft",
-    itemRef: body.itemRef as never,
-    recipientCount: body.recipientCount ?? 0,
+    itemRef: body.itemRef,
+    recipientIds: body.recipientIds ?? [],
     createdBy: body.createdBy ?? "bauservice-user",
   });
 

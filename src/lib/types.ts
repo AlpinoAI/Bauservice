@@ -90,9 +90,9 @@ export type Campaign = {
   status: "draft" | "sent";
   origin: "recipient" | "item";
   itemRef?: { service: Service; itemId: number };
+  recipientIds: number[];
   createdAt: string;
   createdBy: string;
-  recipientCount: number;
 };
 
 export type RenderPayload = {

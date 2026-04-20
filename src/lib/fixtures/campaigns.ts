@@ -7,7 +7,13 @@ export function listCampaigns(filter?: { status?: "draft" | "sent" }): Campaign[
   return store.filter((c) => c.status === filter.status);
 }
 
-export function createCampaign(input: Omit<Campaign, "id" | "createdAt">): Campaign {
+export function findCampaign(id: string): Campaign | undefined {
+  return store.find((c) => c.id === id);
+}
+
+export function createCampaign(
+  input: Omit<Campaign, "id" | "createdAt">
+): Campaign {
   const campaign: Campaign = {
     ...input,
     id: `camp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
@@ -15,4 +21,11 @@ export function createCampaign(input: Omit<Campaign, "id" | "createdAt">): Campa
   };
   store.push(campaign);
   return campaign;
+}
+
+export function markCampaignSent(id: string): Campaign | undefined {
+  const c = findCampaign(id);
+  if (!c) return undefined;
+  c.status = "sent";
+  return c;
 }

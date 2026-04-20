@@ -1,13 +1,41 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { TopNav } from "@/components/top-nav";
 import { RecipientPicker } from "@/components/recipient-picker";
 import { Button } from "@/components/ui/button";
 
 export default function NeuAusKontaktPage() {
+  const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [nextClicked, setNextClicked] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onNext() {
+    if (selectedIds.length === 0) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const now = new Date();
+      const name = `Kampagne ${now.toISOString().slice(0, 10)} · ${selectedIds.length} Empfänger`;
+      const res = await fetch("/api/dummy/sql/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          origin: "recipient",
+          recipientIds: selectedIds,
+        }),
+      });
+      if (!res.ok) throw new Error(`Campaign-Erstellung fehlgeschlagen (${res.status})`);
+      const campaign = (await res.json()) as { id: string };
+      router.push(`/kampagnen/${campaign.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unbekannter Fehler");
+      setLoading(false);
+    }
+  }
 
   return (
     <>
@@ -42,16 +70,12 @@ export default function NeuAusKontaktPage() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            {nextClicked && (
-              <span className="text-xs text-amber-700">
-                Review-Screen folgt in Subtask 4.
-              </span>
-            )}
+            {error && <span className="text-xs text-red-600">{error}</span>}
             <Button
-              disabled={selectedIds.length === 0}
-              onClick={() => setNextClicked(true)}
+              disabled={selectedIds.length === 0 || loading}
+              onClick={onNext}
             >
-              Weiter zur Auswahl
+              {loading ? "Lege an…" : "Weiter zur Auswahl"}
             </Button>
           </div>
         </div>

@@ -1,17 +1,62 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { TopNav } from "@/components/top-nav";
 import { ItemPicker } from "@/components/item-picker";
 import { Button } from "@/components/ui/button";
 import { serviceLabels } from "@/lib/filter-options";
-import type { Service } from "@/lib/types";
+import type { Recipient, Service, WithScore } from "@/lib/types";
 
 type Selection = { service: Service; itemId: number };
 
 export default function NeuAusItemPage() {
+  const router = useRouter();
   const [selected, setSelected] = useState<Selection | null>(null);
-  const [nextClicked, setNextClicked] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onNext() {
+    if (!selected) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const matchRes = await fetch("/api/dummy/matching/recipients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service: selected.service,
+          itemId: selected.itemId,
+          n: 20,
+        }),
+      });
+      if (!matchRes.ok) throw new Error(`Matching fehlgeschlagen (${matchRes.status})`);
+      const matchData = (await matchRes.json()) as {
+        items: WithScore<Recipient>[];
+      };
+      const recipientIds = matchData.items.map((r) => r.id);
+
+      const now = new Date();
+      const name = `Kampagne ${now.toISOString().slice(0, 10)} · ${serviceLabels[selected.service]} · ID ${selected.itemId}`;
+
+      const res = await fetch("/api/dummy/sql/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          origin: "item",
+          itemRef: selected,
+          recipientIds,
+        }),
+      });
+      if (!res.ok) throw new Error(`Campaign-Erstellung fehlgeschlagen (${res.status})`);
+      const campaign = (await res.json()) as { id: string };
+      router.push(`/kampagnen/${campaign.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unbekannter Fehler");
+      setLoading(false);
+    }
+  }
 
   return (
     <>
@@ -44,13 +89,9 @@ export default function NeuAusItemPage() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            {nextClicked && (
-              <span className="text-xs text-amber-700">
-                Empfänger-Vorschlag + Review-Screen folgen in Subtask 4.
-              </span>
-            )}
-            <Button disabled={!selected} onClick={() => setNextClicked(true)}>
-              Weiter zu Empfängern
+            {error && <span className="text-xs text-red-600">{error}</span>}
+            <Button disabled={!selected || loading} onClick={onNext}>
+              {loading ? "Lege an…" : "Weiter zu Empfängern"}
             </Button>
           </div>
         </div>

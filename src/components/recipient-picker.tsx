@@ -93,7 +93,14 @@ export function RecipientPicker({
       />
 
       <div className="rounded-lg border border-zinc-200 bg-white">
-        <div className="grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-4 border-b border-zinc-100 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+        <div
+          className={cn(
+            "grid items-center gap-4 border-b border-zinc-100 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-zinc-500",
+            mode === "select"
+              ? "grid-cols-[auto_1fr_auto_auto_auto]"
+              : "grid-cols-[1fr_auto_auto_auto]"
+          )}
+        >
           {mode === "select" && <div className="w-5" />}
           <div>Name</div>
           <div>Bezirk</div>
@@ -117,8 +124,11 @@ export function RecipientPicker({
                 <li
                   key={r.id}
                   className={cn(
-                    "grid cursor-pointer grid-cols-[auto_1fr_auto_auto_auto] items-center gap-4 px-4 py-3 text-sm transition",
-                    selected ? "bg-blue-50" : "hover:bg-zinc-50"
+                    "grid items-center gap-4 px-4 py-3 text-sm transition",
+                    mode === "select"
+                      ? "cursor-pointer grid-cols-[auto_1fr_auto_auto_auto]"
+                      : "grid-cols-[1fr_auto_auto_auto]",
+                    selected ? "bg-blue-50" : mode === "select" ? "hover:bg-zinc-50" : ""
                   )}
                   onClick={() => mode === "select" && toggle(r.id)}
                 >
