@@ -1,9 +1,8 @@
-import mjml2html from "mjml";
 import { convert as htmlToText } from "html-to-text";
 import type { Example, RenderPayload, Service } from "@/lib/types";
 import { servicesOrder } from "@/lib/filter-options";
 
-const TEMPLATE_VERSION = "v1";
+const TEMPLATE_VERSION = "v2";
 
 const serviceLabelDe: Record<Service, string> = {
   ausschreibungen: "Aktuelle Ausschreibungen",
@@ -49,7 +48,7 @@ function describe(it: Example, sprache: "de" | "it"): string {
   return sprache === "it" ? it.beschreibungIt : it.beschreibungDe;
 }
 
-function buildServiceSection(
+function buildSection(
   label: string,
   items: Example[],
   sprache: "de" | "it"
@@ -57,17 +56,28 @@ function buildServiceSection(
   if (items.length === 0) return "";
   const rows = items
     .map(
-      (it) =>
-        `<mj-text padding="4px 0" color="#334155" line-height="1.5">• ${escape(describe(it, sprache))}</mj-text>`
+      (it) => `
+      <tr>
+        <td style="padding:6px 0;color:#334155;font-size:14px;line-height:1.55;vertical-align:top;">
+          <span style="display:inline-block;width:6px;height:6px;background:#2563eb;border-radius:50%;margin-right:10px;vertical-align:middle;"></span>${escape(describe(it, sprache))}
+        </td>
+      </tr>`
     )
     .join("");
   return `
-    <mj-text padding-top="24px" font-size="16px" font-weight="600" color="#0f172a">${escape(label)}</mj-text>
-    ${rows}
-  `;
+    <tr>
+      <td style="padding-top:22px;font-size:15px;font-weight:600;color:#0f172a;letter-spacing:-0.01em;">${escape(label)}</td>
+    </tr>
+    <tr>
+      <td>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          ${rows}
+        </table>
+      </td>
+    </tr>`;
 }
 
-function buildMjml(payload: RenderPayload["payload"], sprache: "de" | "it"): string {
+function buildHtml(payload: RenderPayload["payload"], sprache: "de" | "it"): string {
   const d = defaults[sprache];
   const salutation = escape(payload.overrides?.salutation || d.salutation);
   const intro = escape(payload.overrides?.intro || d.intro);
@@ -76,37 +86,54 @@ function buildMjml(payload: RenderPayload["payload"], sprache: "de" | "it"): str
 
   const sections = servicesOrder
     .filter((s) => payload.serviceEnabled[s])
-    .map((s) => buildServiceSection(labels[s], payload.examples[s] ?? [], sprache))
+    .map((s) => buildSection(labels[s], payload.examples[s] ?? [], sprache))
     .join("");
 
-  return `
-<mjml>
-  <mj-head>
-    <mj-title>Bauservice</mj-title>
-    <mj-preview>${escape(d.preview)}</mj-preview>
-    <mj-attributes>
-      <mj-all font-family="Inter, Arial, sans-serif" />
-      <mj-text color="#0f172a" font-size="14px" line-height="1.5" />
-    </mj-attributes>
-  </mj-head>
-  <mj-body background-color="#fafafa">
-    <mj-section padding="24px 0">
-      <mj-column>
-        <mj-text align="left" font-size="12px" color="#2563eb" font-weight="600" padding-bottom="0">BAUSERVICE</mj-text>
-      </mj-column>
-    </mj-section>
-    <mj-section background-color="#ffffff" padding="32px" border="1px solid #e4e4e7" border-radius="8px">
-      <mj-column>
-        <mj-text>${salutation}</mj-text>
-        <mj-text color="#334155">${intro}</mj-text>
-        ${sections}
-        <mj-text padding-top="28px" color="#334155">${cta}</mj-text>
-        <mj-divider border-color="#e4e4e7" padding="24px 0 8px 0" />
-        <mj-text font-size="11px" color="#71717a">${escape(d.footer)}</mj-text>
-      </mj-column>
-    </mj-section>
-  </mj-body>
-</mjml>`.trim();
+  return `<!doctype html>
+<html lang="${sprache}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Bauservice</title>
+  </head>
+  <body style="margin:0;padding:0;background:#fafafa;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fafafa;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:620px;">
+            <tr>
+              <td style="padding-bottom:18px;font-size:12px;font-weight:700;letter-spacing:0.06em;color:#2563eb;">
+                BAUSERVICE
+              </td>
+            </tr>
+            <tr>
+              <td style="background:#ffffff;border:1px solid #e4e4e7;border-radius:10px;padding:32px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="font-size:14px;line-height:1.55;padding-bottom:10px;">${salutation}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:14px;line-height:1.55;color:#334155;">${intro}</td>
+                  </tr>
+                  ${sections}
+                  <tr>
+                    <td style="padding-top:28px;font-size:14px;line-height:1.55;color:#334155;">${cta}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding-top:26px;border-top:1px solid #e4e4e7;padding-bottom:6px;">&nbsp;</td>
+                  </tr>
+                  <tr>
+                    <td style="padding-top:4px;font-size:11px;color:#71717a;">${escape(d.footer)}</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
 }
 
 type RenderResult = { html: string; text: string };
@@ -123,13 +150,7 @@ export function render(payload: RenderPayload): RenderResult {
   const hit = cache.get(key);
   if (hit) return hit;
 
-  const mjmlString = buildMjml(payload.payload, payload.sprache);
-  const { html, errors } = mjml2html(mjmlString, { validationLevel: "soft" });
-
-  if (errors && errors.length > 0) {
-    // Soft errors logged but non-fatal
-    console.warn("[mjml] warnings:", errors.slice(0, 3));
-  }
+  const html = buildHtml(payload.payload, payload.sprache);
 
   const text = htmlToText(html, {
     wordwrap: 78,
