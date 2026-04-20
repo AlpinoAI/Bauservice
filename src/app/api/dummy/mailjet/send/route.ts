@@ -18,13 +18,12 @@ export async function POST(req: Request) {
     );
   }
 
+  // In der Dummy-Phase ist der Campaign-Store per-Lambda-Instance in-memory.
+  // Wenn der Send-Call auf einer anderen Instanz landet als der Create-Call,
+  // kennt sie die Campaign nicht. Wir brechen deshalb nicht ab, sondern
+  // prüfen Opt-out trotzdem und überspringen nur das Status-Update.
   const campaign = findCampaign(body.campaignId);
-  if (!campaign) {
-    return NextResponse.json(
-      { error: "campaign not found" },
-      { status: 404 }
-    );
-  }
+  const campaignKnownHere = campaign !== undefined;
 
   const accepted: number[] = [];
   const rejected: Array<{ recipientId: number; reason: string }> = [];
@@ -52,7 +51,7 @@ export async function POST(req: Request) {
     accepted.push(id);
   }
 
-  if (accepted.length > 0) {
+  if (accepted.length > 0 && campaignKnownHere) {
     markCampaignSent(body.campaignId);
   }
 
