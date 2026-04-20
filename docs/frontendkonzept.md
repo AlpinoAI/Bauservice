@@ -127,34 +127,98 @@ Alle Calls laufen in Phase 1 über stubbed API-Routen unter `app/api/dummy/*`. D
 | `POST /api/dummy/render/mjml` | Frontend → Render-Service | Bei jeder Beispieländerung | `{ templateId, payload }` → `{ html, text }` |
 | `POST /api/dummy/mailjet/send` | Frontend → Mailjet | `/kampagnen/[id]/versand` | `{ campaignId }` → `{ jobId, accepted }` |
 
-**Datenmodell-Skizze (TypeScript):**
+**Reale Tabellenstruktur (Snapshot 2026-04-20):**
+
+Die Bauservice-DB ist MySQL. Alle relevanten Tabellen tragen das Präfix `VectorDB_` — sie sind bereits als Vorstufe für die Weaviate-Vektorisierung aufbereitet. Multilingualität ist durchgehend über `_D`- und `_I`-Suffix-Spalten gelöst (Deutsch/Italienisch).
+
+| Tabelle | Rolle im System | Kern-Spalten |
+|---|---|---|
+| `VectorDB_Kontakte` | Empfänger + alle beteiligten Personen/Firmen | `id`, `Kontakt_full_name_D/_I`, `Sprache`, `EMailAdresse`, `PEC`, `inBezirk_d/_i`, `inProvinz_i`, Rollen-Flags `Ausscheiber` · `Anbieter` · `Kunde` · `Aktiv`, Opt-out `Keine Werbung senden` |
+| `VectorDB_Ausschreibungen` | Service 1: öffentliche Ausschreibungen | `AusschreibungenID`, `Datum`, `Datum_Zuschlag`, `Bezirk`, `Ausschreiber_id`, `Beschreibung_D/_I`, `Betrag`, `gewinner_id`, `Projektant_id`, `CIG`, `CUP` |
+| `VectorDB_Ausschreibungen_Teilnehmer` | Service 2: Ergebnisse/Teilnehmer (Join) | `AusschreibungenID`, `TeilnehmerID` → `Kontakte.id`, `Betrag`, `PunkteBewertung`, `prozent`, `Ausschlussgrund` |
+| `VectorDB_Ausschreibungen_Hauptarbeiten` | Gewerks-Zuordnung pro Ausschreibung | `Ausschreibung`, `Unterkategorie`, `SOA`, `Betrag` |
+| `VectorDB_Ausschreibungen_AbtrennbareArbeiten` | Abtrennbare Arbeiten pro Ausschreibung | `Ausschreibung`, `AbtrennbareArbeit`, `SOA`, `Betrag` |
+| `VectorDB_Projektierungen` | Service 3: Beschlüsse/Projekte | `ProjektierungenId`, `Datum`, `BeschlussNr`, `BeschlussDatum`, `BeschreibungD/I`, `Betrag`, `GeschaetzterBetrag`, `Status`, `Bezirk`, `Provinz` |
+| `VectorDB_Konzessionen` | Service 4: Baukonzessionen | `KonzessionenID`, `Datum`, `Gemeinde`, `KonzessionenTyp`, `conz_desc_d/_i`, `Name`, `adresse`, `Ort`, `Bezirke_BezeichnungI`, `Provinzen_BezeichnungI` |
+| `VectorDB_Oberkategorie_Unterkategorie` | Kategorien-Taxonomie (Gewerke) | — |
+| `VectorDB_Projektierungen_Unterkategorie` | Zuordnung Projekt ↔ Kategorie | — |
+| `VectorDB_Konzessionen_Unterkategorie` | Zuordnung Konzession ↔ Kategorie | — |
+
+**Datenmodell-Skizze (TypeScript, angelehnt an reale Spalten):**
 
 ```ts
 type Service = 'ausschreibungen' | 'ergebnisse' | 'beschluesse' | 'baukonzessionen';
+type Sprache = 'de' | 'it';
 
 type Recipient = {
-  id: string;
-  company: string;
-  contactName?: string;
-  email: string;
-  gewerk: string[];
-  region: string;
-  sizeCategory?: 'S' | 'M' | 'L';
+  id: number;                         // VectorDB_Kontakte.id
+  nameDe: string;                     // Kontakt_full_name_D
+  nameIt: string;                     // Kontakt_full_name_I
+  sprache: Sprache;                   // Sprache
+  email: string;                      // EMailAdresse
+  pec?: string;                       // PEC
+  bezirkDe?: string;                  // inBezirk_d
+  provinz?: string;                   // inProvinz_i
+  rollen: {
+    ausschreiber: boolean;            // Auftraggeber / Vergabestelle
+    anbieter: boolean;                // Firma, die Ausschreibungen bedient
+    kunde: boolean;                   // Bauservice-Kunde
+  };
+  aktiv: boolean;                     // Aktiv
+  optOut: boolean;                    // "Keine Werbung senden"
 };
 
-type Example = {
-  id: string;
+type ExampleBase = {
+  id: number;
   service: Service;
-  title: string;
-  subtitle?: string;
-  auftraggeber?: string;
-  ort?: string;
-  datum?: string;        // ISO
-  kategorien: string[];
-  betrag?: number;       // EUR
-  betragNote?: string;   // z. B. "Geschätzter Betrag"
-  quelle: { table: string; id: string };
+  datum?: string;                     // ISO
+  bezirk?: string;
+  beschreibungDe: string;
+  beschreibungIt: string;
+  quelle: { table: string; pk: string };
 };
+
+type AusschreibungExample = ExampleBase & {
+  service: 'ausschreibungen';
+  ausschreiberId?: number;
+  betrag?: number;
+  cig?: string;
+  cup?: string;
+  gewinnerId?: number;                // erst nach Zuschlag gesetzt
+};
+
+type ErgebnisExample = ExampleBase & {
+  service: 'ergebnisse';
+  ausschreibungId: number;
+  teilnehmerId: number;
+  betrag?: number;
+  punkteBewertung?: number;
+  prozent?: number;
+};
+
+type BeschlussExample = ExampleBase & {
+  service: 'beschluesse';
+  beschlussNr?: string;
+  beschlussDatum?: string;
+  betrag?: number;
+  geschaetzterBetrag?: number;
+  status?: string;
+};
+
+type KonzessionExample = ExampleBase & {
+  service: 'baukonzessionen';
+  gemeinde?: string;
+  konzessionenTyp?: string;
+  name?: string;
+  adresse?: string;
+  ort?: string;
+};
+
+type Example =
+  | AusschreibungExample
+  | ErgebnisExample
+  | BeschlussExample
+  | KonzessionExample;
 
 type CampaignDraft = {
   id: string;
@@ -163,15 +227,21 @@ type CampaignDraft = {
   createdAt: string;
   createdBy: string;
   items: Array<{
-    recipientId: string;
-    selectedExamples: Record<Service, string[]>;  // exampleIds
+    recipientId: number;
+    selectedExamples: Record<Service, number[]>;
     serviceEnabled: Record<Service, boolean>;
     overrides?: { salutation?: string; intro?: string; cta?: string };
   }>;
 };
 ```
 
-Die konkreten SQL-Spalten werden nach Schema-Abfrage (Kickoff) eingepflegt — die Types bilden heute ein plausibles Modell ab, nicht das reale Schema.
+**Abgeleitete UI-Regeln aus dem Schema:**
+
+- **Opt-out respektieren.** Empfänger mit `Keine Werbung senden = 1` oder `Aktiv = 0` dürfen im `RecipientPicker` nicht auswählbar sein — hart filtern, nicht nur visuell warnen.
+- **Sprache pro Empfänger.** `Sprache` bestimmt, ob `_D`- oder `_I`-Spalten im Mail-Render verwendet werden. Default-Template muss beide Varianten haben.
+- **Rollen-Filter.** Beim Picker standardmäßig nur Kontakte mit `Anbieter = 1` zeigen (das sind die typischen Werbeempfänger); `Ausscheiber` sind öffentliche Stellen, `Kunde` sind Bestandskunden — als Filter-Chips anbieten.
+- **Geografie-Filter.** `inBezirk_d` und `inProvinz_i` sind die primären Region-Filter für die Matching-Logik.
+- **Gewerks-Matching** läuft über die `Unterkategorie`-Join-Tabellen; die Taxonomie wird aus `VectorDB_Oberkategorie_Unterkategorie` abgeleitet.
 
 ---
 
@@ -215,17 +285,24 @@ Die konkreten SQL-Spalten werden nach Schema-Abfrage (Kickoff) eingepflegt — d
 
 ## 8. Offene Fragen an Bauservice
 
-Diese Punkte können nicht aus dem vorhandenen Material abgeleitet werden und müssen im Kickoff / Discovery geklärt werden:
+Durch den Schema-Snapshot vom 20.04.2026 sind einige Ausgangsfragen bereits beantwortet:
 
-1. **DBMS.** MySQL oder PostgreSQL? Sind die vier Services über bestehende Views abrufbar oder müssen Views erst angelegt werden? (Bestand-Host `167.235.240.105` ist HTTP-reachable, MySQL-Port 3306 war von außen blockiert.)
-2. **Empfängerdaten.** Kommen Prospects aus einer internen DB bei Bauservice, aus einem CRM, oder ausschließlich per CSV-Upload?
+- **DBMS:** MySQL, bestätigt.
+- **Empfängerdaten:** interne Tabelle `VectorDB_Kontakte`, kein separates CRM nötig. CSV-Upload bleibt als Ergänzung denkbar, ist aber nicht Pflicht.
+- **Mehrsprachigkeit:** pro Empfänger über `Kontakte.Sprache` (DE/IT) und `_D`/`_I`-Spalten bereits strukturell vorgesehen. Templates müssen zweisprachig ausgeliefert werden.
+- **Opt-out-Handling:** Flag `Keine Werbung senden` in `VectorDB_Kontakte` — muss im Picker hart filtern und im Versand-Audit mitprotokolliert werden.
+
+Diese Punkte bleiben offen und müssen im Kickoff / Discovery geklärt werden:
+
+1. **View-Strategie.** Die `VectorDB_*`-Tabellen sind offenbar Aufbereitungs-Tabellen — werden sie periodisch befüllt (Batch-Job bei Bauservice) oder sind es Views auf Live-Daten? Wie oft aktualisieren? Sync-Intervall für Weaviate-Reindex abhängig davon.
+2. **Gewerks-Taxonomie.** Die Tabelle `VectorDB_Oberkategorie_Unterkategorie` strukturiert Gewerke. Gibt es Dokumentation / Anzahl der Kategorien? Für das Matching und die Filter-UI relevant.
 3. **Absender-Identität & DKIM.** Welche Absenderadresse(n)? Ist Mailjet-DKIM-Setup für `bauservice.it` bereits vorhanden?
 4. **Plain-Text-Fallback.** Muss ein Plain-Text-Part verpflichtend mitgehen (Deliverability-Best-Practice)?
-5. **Mehrsprachigkeit.** E-Mails DE-only oder auch IT? Wenn beides: pro Empfänger konfigurierbar?
-6. **Template-Anzahl bei Launch.** Ein Template mit Variablen oder mehrere (Neu-Akquise vs. Bestandskunden)?
-7. **Auth-Verfahren & IdP.** Gibt es einen bestehenden IdP (Microsoft Entra, Google Workspace)? Sonst: Magic-Link ok?
-8. **Matching-Kriterien.** Gewerk/Region/Projektgröße sind klar. Gibt es weitere (historische Aufträge des Empfängers, Umsatzklasse, Netzwerk-Zugehörigkeit)?
-9. **Versand-Audit.** Welche Daten müssen aus Compliance-Gründen pro Versand festgehalten werden (Versand-Zeitpunkt, gewählte Beispiele, Mitarbeiter-ID, Opt-out-Status)?
+5. **Template-Anzahl bei Launch.** Ein Template mit Variablen oder mehrere (Neu-Akquise vs. Bestandskunden, DE vs. IT separate Templates)?
+6. **Auth-Verfahren & IdP.** Gibt es einen bestehenden IdP (Microsoft Entra, Google Workspace)? Sonst: Magic-Link ok?
+7. **Matching-Kriterien.** Gewerk/Region (`inBezirk_d`, `inProvinz_i`) sind über das Schema klar. Gibt es weitere (historische Aufträge aus `Ausschreibungen_Teilnehmer`, Umsatzklasse, Netzwerk-Zugehörigkeit)?
+8. **Versand-Audit.** Welche Daten müssen aus Compliance-Gründen pro Versand festgehalten werden (Versand-Zeitpunkt, gewählte Beispiele, Mitarbeiter-ID, Opt-out-Status zum Versandzeitpunkt)?
+9. **DB-Zugang für Produktion.** MySQL-Port ist von außen blockiert; phpMyAdmin-Scraping ist nur Interims-Lösung. Benötigt: VPN, SSH-Tunnel oder Firewall-Freischaltung plus dediziertes Read-only-Konto (nicht `thaler` — dessen Zugangsdaten über Plain-HTTP liefen, sollten rotiert werden).
 
 ---
 
