@@ -1,26 +1,71 @@
 # Frontendkonzept — Bauservice Email-Automation
 
-**Session 1 · 2026-04-20 · Status: Entwurf für Review mit Bauservice**
+**Session 1 · 2026-04-20 · Status: Entwurf, Rev 2 nach Scope-Alignment**
 
 Dieses Dokument beschreibt das Zielbild des Next.js-Frontends für die AI-Powered Email-Automation von Bauservice. Es klärt Seitenstruktur, Komponenten-Inventar, State-Management, Integrationspunkte und offene Fragen, damit die Implementierung auf einer geteilten Grundlage starten kann. Implementiert wird später — heute nur Konzept.
 
 Alle externen Systeme werden in dieser Phase gegen **Dummy-Endpoints** angesprochen; der Swap auf echte Backends (Weaviate, SQL-Views, Mailjet) erfolgt in Phase 2.
 
+**Zuständigkeiten im Team:**
+- **Julian** — Frontend (Next.js-App, Komponenten, Review-Flow) und Email-Templates (MJML, Rendering, Plain-Text-Fallback).
+- **Matthias** — Matching-Logik, Bestands-DB (Views, Opt-out-Filter), Weaviate-Vektorisierung, Reindex-Pipeline.
+
+Die Integrationsgrenze läuft über die Dummy-Endpoints in § 5. Julian liefert die Request-Shapes, Matthias liefert die Responses.
+
+---
+
+## 0. Phase-1-Scope (MVP)
+
+Bauservice ist ein kleiner Kunde (3.900 EUR einmalig + 65 EUR/Monat, 6 Wochen, 1–3 interne Nutzer). Das Frontend muss den Kern-Use-Case wasserdicht abdecken, darf aber **keinen Enterprise-Ballast** mitschleppen. Alles unten Gelistete wird bewusst aus Phase 1 ausgeschlossen und kann nach Go-live nachgezogen werden.
+
+**In Phase 1 enthalten:**
+- Bidirektionaler Einstieg: Kampagne starten **aus Kontakt** oder **aus einzelnem Item** (Ausschreibung / Ergebnis / Projekt / Konzession).
+- Automatische Beispiel- bzw. Empfängerauswahl via Matching-API (Dummy).
+- MJML-Rendering pro Empfänger, Sprache aus `VectorDB_Kontakte.Sprache` (DE oder IT).
+- Review-Screen mit Individual-Editing pro Empfänger (Beispiele swappen, Services togglen, Texte überschreiben).
+- Versand über Mailjet mit menschlicher Freigabe.
+- Kampagnen-Liste mit zwei Zuständen: `draft`, `sent`.
+- Magic-Link-Login für Bauservice-Mitarbeiter, keine Rollentrennung.
+- Deployment auf Vercel (EU-Region) mit Custom Domain.
+
+**Explizit NICHT in Phase 1 (Phase 2 oder später):**
+- Settings-Bereich im Frontend (Templates, Service-Defaults, Nutzerverwaltung) — Templates und Defaults liegen als Files/Konstanten im Repo und werden per PR geändert.
+- Rollentrennung `admin` / `reviewer` — flacher Zugang reicht.
+- CSV/XLSX-Upload von Empfängerlisten — Empfänger kommen ausschließlich aus `VectorDB_Kontakte`.
+- Erweiterte Kampagnen-Statusmaschine (`review`, `sending`, `error`) inkl. SWR-Polling — Versand ist ein einmaliger synchroner Aufruf, Status über manuelles Refresh.
+- `CampaignTimeline`-Komponente, Device-Size-Switch im Preview, Bulk-Editing "gleicher Block für alle mit Gewerk X".
+- Persistente Draft-Wiederaufnahme zwischen Sessions (nice-to-have, in Phase 1 nur In-Memory bis Versand oder Verwerfen).
+
+Ergebnis: ~3 Routen, ~6 Feature-Komponenten, ein MJML-Template mit DE/IT-Varianten.
+
 ---
 
 ## 1. Zielbild & Nutzerfluss
 
-Ein Bauservice-Mitarbeiter öffnet die Anwendung, um an einem Vormittag fünfzehn personalisierte Werbe-E-Mails an potenzielle Kunden rauszuschicken. Heute tippt er dafür manuell Beispiele aus vier Datenquellen zusammen — das Tool übernimmt das in einer geführten Oberfläche.
+Ein Bauservice-Mitarbeiter öffnet die Anwendung, um an einem Vormittag personalisierte Werbe-E-Mails an potenzielle Kunden rauszuschicken. Heute tippt er dafür manuell Beispiele aus vier Datenquellen zusammen — das Tool übernimmt das in einer geführten Oberfläche.
 
-Der Workflow folgt fünf Schritten, die auch die Route-Struktur prägen:
+Es gibt zwei **gleichberechtigte Einstiege** — Richtung A setzt an einer Kontakt-Suche an (gezielt, "Kunde im Kopf"), Richtung B an einer chronologischen Liste neuer Items (Browsing, "Was ist heute rausgekommen?"). Beide münden im selben Review- und Versand-Flow:
 
-1. **Empfängerauswahl.** Einzelne Empfänger picken, eine gespeicherte Liste laden oder CSV/XLSX hochladen. Jeder Empfänger trägt Profil-Attribute (Gewerk, Region, Branche, Größe).
-2. **Automatische Beispielauswahl.** Pro Service (Ausschreibungen, Ergebnisse, Beschlüsse, Baukonzessionen) wählt das System semantisch passende Einträge — Default fünf pro Service, konfigurierbar.
-3. **Email-Draft.** Ein MJML-Template wird serverseitig gerendert: Anrede, Einleitung, vier Service-Blöcke, Call-to-Action. Responsive Layout, Plain-Text-Fallback.
-4. **Review & Anpassen.** Einzelne Beispiele austauschen, Services ein-/ausblenden, Texte editieren. Änderungen sind pro Empfänger persistent, Bulk-Actions möglich (z. B. "gleicher Service-Block für alle mit Gewerk X").
-5. **Approve & Send.** Letzte Vorschau, Versand-Button, Bestätigungsdialog. Mailjet übernimmt, Status läuft in die Kampagnen-Übersicht zurück.
+### Richtung A — Aus Kontakt ("Ich habe einen Kunden im Kopf")
 
-Alle Schritte sind wiederaufrufbar — eine Kampagne kann zwischengespeichert und später fortgesetzt werden.
+1. **Kontakt wählen.** Aus `VectorDB_Kontakte` einen oder mehrere Empfänger picken (Live-Suche, Filter nach Gewerk/Region/Rolle, Segment-Toggle **Neu / Bestand / Alle**). Opt-out- und Inaktiv-Kontakte sind hart ausgeblendet.
+2. **Automatische Beispielauswahl.** Pro Service (Ausschreibungen, Ergebnisse, Beschlüsse, Baukonzessionen) liefert die Matching-API semantisch passende Einträge — Default fünf pro Service.
+3. **Review & Versand** (siehe unten).
+
+### Richtung B — Aus Item ("Ich habe eine interessante Ausschreibung/Projekt/Konzession")
+
+1. **Item wählen.** Aus einer der vier Service-Listen ein konkretes Beispiel auswählen (z. B. eine neue Ausschreibung).
+2. **Automatische Empfängerauswahl.** Die Matching-API liefert passende Kontakte für dieses Item (Gewerk-Match, Region, Rolle = `Anbieter`), Opt-out hart gefiltert.
+3. Bei Bedarf können weitere passende Items aus den anderen Services pro Empfänger ergänzt werden (das Ursprungs-Item bleibt das dominierende).
+4. **Review & Versand** (siehe unten).
+
+### Gemeinsam: Review & Versand (beide Richtungen)
+
+1. **Email-Draft.** Pro Empfänger wird ein MJML-Template serverseitig gerendert: Anrede, Einleitung, Service-Blöcke, Call-to-Action. Sprache aus `Kontakte.Sprache` (DE oder IT), Plain-Text-Fallback mit.
+2. **Review & Anpassen.** Individual-Editing pro Empfänger: einzelne Beispiele austauschen, Services ein-/ausblenden, Texte überschreiben. Empfänger können aus der Versandliste gestrichen werden.
+3. **Approve & Send.** Letzte Vorschau, Versand-Button, Bestätigungsdialog. Mailjet übernimmt, Kampagne wechselt auf `sent`.
+
+Kampagnen werden innerhalb einer Session gehalten; persistente Draft-Wiederaufnahme ist explizit **nicht** Phase 1 (vgl. § 0).
 
 ---
 
@@ -29,38 +74,39 @@ Alle Schritte sind wiederaufrufbar — eine Kampagne kann zwischengespeichert un
 ```
 app/
   layout.tsx                          # Auth-Guard, Top-Nav, Toaster
-  page.tsx                            # Dashboard: offene Kampagnen, letzter Versand, Quick-Stats
+  page.tsx                            # Dashboard: zwei Start-CTAs + letzte Kampagnen
+
   (auth)/
-    login/page.tsx                    # Bauservice-Mitarbeiter-Login
+    login/page.tsx                    # Magic-Link-Login
 
   kampagnen/
-    page.tsx                          # Übersicht: laufend · in Review · versandt · abgebrochen
-    neu/page.tsx                      # Schritt 1 — Empfängerauswahl
+    page.tsx                          # Übersicht: draft · sent
+    neu-aus-kontakt/page.tsx          # Richtung A — Kontakt-Suche (gezielt)
+    neu-aus-item/page.tsx             # Richtung B — neue Items chronologisch (Browsing)
     [id]/
-      page.tsx                        # Schritte 2–4: Draft + Review
-      versand/page.tsx                # Schritt 5: Approve & Send
+      page.tsx                        # Review: Draft + Individual-Editing
+      versand/page.tsx                # Approve & Send
 
   empfaenger/
-    page.tsx                          # Liste + Suche + CSV-Upload
-    [id]/page.tsx                     # Empfänger-Detail (Profil, Historie)
-
-  einstellungen/
-    templates/page.tsx                # MJML-Templates verwalten (Upload, Preview)
-    services/page.tsx                 # Defaults pro Service (Beispielanzahl, Filter)
-    nutzer/page.tsx                   # Nur Admin: Nutzerverwaltung
+    page.tsx                          # Liste + Suche (read-only, aus VectorDB_Kontakte)
+    [id]/page.tsx                     # Empfänger-Detail (Profil, letzte Kampagnen)
 
   api/
     dummy/
-      weaviate/examples/route.ts      # POST — Beispielauswahl
+      matching/examples/route.ts      # POST — für Richtung A: passende Items zu Kontakt
+      matching/recipients/route.ts    # POST — für Richtung B: passende Kontakte zu Item
       sql/recipients/route.ts         # GET — Empfängerstammdaten
-      sql/campaigns/route.ts          # GET/POST — Kampagnen
-      render/mjml/route.ts            # POST — MJML → HTML
+      sql/items/route.ts              # GET — Items aller 4 Services (für Picker in Richtung B)
+      sql/campaigns/route.ts          # GET/POST — Kampagnen (Liste + Create)
+      render/mjml/route.ts            # POST — MJML → HTML (+ Plain-Text)
       mailjet/send/route.ts           # POST — Versand-Trigger
 ```
 
 **Route-Gruppen:**
-- `(auth)` — Login, keine Top-Nav
-- Alle übrigen Routes unter dem Auth-Guard in `layout.tsx`
+- `(auth)` — Login, keine Top-Nav.
+- Alle übrigen Routes unter dem Auth-Guard in `layout.tsx`.
+
+**Aus Phase 1 herausgenommen** (siehe § 0): `einstellungen/*` (Templates/Services/Nutzer), CSV-Upload unter `empfaenger/`.
 
 ---
 
@@ -72,24 +118,25 @@ app/
 |---|---|
 | `LayoutShell` | Top-Nav, Sidebar, Toaster, Auth-State-Kontext |
 | `DataTable` | Generische shadcn-Tabelle mit Sortierung, Filter, Pagination — für Empfänger, Kampagnen, Beispiele |
-| `SearchFilterBar` | Suche + Filter-Chips + Ergebnis-Counter (Anlehnung an Bauservice-Portal-Filterleiste) |
+| `SearchFilterBar` | Live-Suche + Filter-Chips auf allen DB-Dimensionen (Gewerk, Bezirk, Provinz, Rolle, Aktiv, Datum) + Ergebnis-Counter; identisches Pattern für Kontakte und Items |
 | `StatusBadge` | Farbkodierte Badges für Kampagnen-Status (Draft/Review/Versandt/Fehler) |
 | `EmptyState`, `LoadingState`, `ErrorState` | Standardisierte Placeholder |
 
 ### Feature-Komponenten (seitenspezifisch)
 
-| Komponente | Zweck |
-|---|---|
-| `RecipientPicker` | Multi-Select aus Empfänger-Liste, inkl. Live-Suche und Profil-Preview |
-| `RecipientUploadDialog` | CSV/XLSX-Upload mit Spalten-Mapping und Validierung |
-| `ServicePanel` | Container für einen der 4 Services (Titel, Anzahl, Toggle "inkludieren?") |
-| `ExampleCard` | Einzelnes Beispiel mit Metadaten und "Austauschen"-Button |
-| `ExampleSwapSheet` | Side-Sheet mit alternativen Beispielen zur Auswahl (Weaviate-Results) |
-| `ServiceToggle` | Ein-/Ausblenden eines Service-Blocks im Email-Draft |
-| `EmailPreview` | Sandboxed iframe mit gerendertem HTML + Plain-Text-Toggle + Device-Size-Switch |
-| `EditableTextBlock` | Inline-editierbarer Textbereich für Anrede/Einleitung/CTA |
-| `ApprovalBar` | Sticky-Footer mit "Entwurf speichern", "Zur Freigabe", "Versenden" |
-| `CampaignTimeline` | Statushistorie einer Kampagne (erstellt → reviewed → versandt) |
+| Komponente | Zweck | Flow |
+|---|---|---|
+| `RecipientPicker` | Multi-Select aus `VectorDB_Kontakte`, Live-Suche, Gewerk-/Region-/Rollen-Filter, Opt-out hart ausgeblendet | A + Review |
+| `ItemPicker` | Auswahl eines Items aus einer der 4 Service-Listen (Ausschreibung / Ergebnis / Projekt / Konzession), Service-Umschalter als Tabs | B |
+| `ServicePanel` | Container für einen Service-Block (Titel, Anzahl, Inkludieren-Toggle) | Review |
+| `ExampleCard` | Einzelnes Beispiel mit Metadaten und "Austauschen"-Button | Review |
+| `ExampleSwapSheet` | Side-Sheet mit alternativen Beispielen zur Auswahl (Matching-API-Results) | Review |
+| `ServiceToggle` | Ein-/Ausblenden eines Service-Blocks im Email-Draft pro Empfänger | Review |
+| `EmailPreview` | Sandboxed iframe mit gerendertem HTML + Plain-Text-Toggle (Device-Size-Switch: Phase 2) | Review |
+| `EditableTextBlock` | Inline-editierbarer Textbereich für Anrede/Einleitung/CTA-Overrides | Review |
+| `ApprovalBar` | Sticky-Footer mit "Verwerfen" und "Versenden" | Review / Versand |
+
+**Aus Phase 1 herausgenommen:** `RecipientUploadDialog` (kein CSV/XLSX), `CampaignTimeline` (zwei Status reichen).
 
 ---
 
@@ -104,13 +151,14 @@ app/
 | Surface | Quelle | Cache/Polling |
 |---|---|---|
 | Kampagnen-Liste | SQL-View (Dummy-Route) | RSC revalidate on mutation |
-| Empfänger-Liste | SQL-View (Dummy-Route) | RSC, CSV-Upload triggert Revalidate |
-| Beispielauswahl | Weaviate (Dummy-Route) | On-demand pro Service + Swap-Action |
-| Email-Draft | Server-Action rendert MJML | Bei Beispieländerung neu rendern |
-| Versand-Status | Mailjet-Webhook → SQL | SWR-Polling (alle 10 s) nur auf `/kampagnen/[id]/versand` |
+| Empfänger-Liste | SQL-View (Dummy-Route) | RSC |
+| Item-Liste (Richtung B) | SQL-View (Dummy-Route, pro Service) | RSC |
+| Beispielauswahl / Empfängervorschläge | Matching-API (Dummy) | On-demand beim Flow-Start + Swap-Action |
+| Email-Draft | Server-Action rendert MJML | Bei Beispieländerung oder Text-Override neu rendern |
+| Versand-Status | Mailjet-Response beim Send-Call | Synchrones Ergebnis, kein Polling in Phase 1 |
 
 **Client-Store (Zustand) hält nur:**
-- aktuelle Kampagnen-ID, ausgewählte Beispiele pro Service, Toggle-Zustände, ungespeicherte Text-Edits, Dirty-Flag
+- aktuelle Kampagnen-ID, Flow-Richtung (A/B), ausgewählte Beispiele pro Service, Toggle-Zustände, Text-Overrides, Empfänger-Skip-Liste, Dirty-Flag.
 
 ---
 
@@ -120,12 +168,19 @@ Alle Calls laufen in Phase 1 über stubbed API-Routen unter `app/api/dummy/*`. D
 
 | Integration | Richtung | Auslösender Screen | Payload (verkürzt) |
 |---|---|---|---|
-| `POST /api/dummy/weaviate/examples` | Frontend → Weaviate | Review-Screen (Initial-Load, Swap) | `{ recipientId, service, n, filters? }` → `Example[]` |
-| `GET /api/dummy/sql/recipients` | Frontend → SQL-View | `/empfaenger`, Picker | `?q=&gewerk=&region=&limit=` → `Recipient[]` |
+| `POST /api/dummy/matching/examples` | Frontend → Matching-API | Review (Flow A Initial-Load, Swap) | `{ recipientId, service, n, filters? }` → `ExampleWithScore[]` |
+| `POST /api/dummy/matching/recipients` | Frontend → Matching-API | Review (Flow B Initial-Load) | `{ service, itemId, n, filters? }` → `RecipientWithScore[]` |
+| `GET /api/dummy/sql/recipients` | Frontend → SQL-View | `/empfaenger`, Recipient-Picker | `?q=&gewerk=&region=&rolle=&limit=` → `Recipient[]` (Opt-out/Inaktiv serverseitig gefiltert) |
+| `GET /api/dummy/sql/items` | Frontend → SQL-View | Item-Picker (Flow B) | `?service=&q=&bezirk=&limit=` → `Example[]` |
 | `GET /api/dummy/sql/campaigns` | Frontend → SQL | `/kampagnen` | `?status=&limit=` → `Campaign[]` |
-| `POST /api/dummy/sql/campaigns` | Frontend → SQL | `/kampagnen/neu` | `{ name, recipientIds }` → `Campaign` |
-| `POST /api/dummy/render/mjml` | Frontend → Render-Service | Bei jeder Beispieländerung | `{ templateId, payload }` → `{ html, text }` |
-| `POST /api/dummy/mailjet/send` | Frontend → Mailjet | `/kampagnen/[id]/versand` | `{ campaignId }` → `{ jobId, accepted }` |
+| `POST /api/dummy/sql/campaigns` | Frontend → SQL | `/kampagnen/neu-aus-*` | `{ name, origin: 'recipient'\|'item', recipientIds?, itemRef? }` → `Campaign` |
+| `POST /api/dummy/render/mjml` | Frontend → Render-Service | Bei jeder Beispieländerung oder Text-Override | `{ templateId, sprache, payload }` → `{ html, text }` |
+| `POST /api/dummy/mailjet/send` | Frontend → Mailjet | `/kampagnen/[id]/versand` | `{ campaignId }` → `{ jobId, accepted, rejected? }` |
+
+**Wichtig für den Kontrakt mit Matthias (Matching/DB):**
+- Beide `matching/*`-Endpoints liefern einen **Relevanz-Score** (0–1) pro Treffer mit, damit der Review-Screen "bessere Beispiele" anbieten kann.
+- Der **Opt-out- und Aktiv-Filter** wird serverseitig in den SQL- und Matching-Routen durchgesetzt, nicht erst im Frontend — das ist auch für das Versand-Audit relevant.
+- Die **Sprachauswahl** (`Kontakte.Sprache` = `'de'` | `'it'`) wird vom Frontend an `render/mjml` mitgegeben; welche `_D`/`_I`-Spalten geliefert werden, entscheidet die Matching-API basierend auf der Empfängersprache.
 
 **Reale Tabellenstruktur (Snapshot 2026-04-20):**
 
@@ -223,25 +278,30 @@ type Example =
 type CampaignDraft = {
   id: string;
   name: string;
-  status: 'draft' | 'review' | 'sending' | 'sent' | 'error';
+  status: 'draft' | 'sent';            // Phase 1 nur zwei Status
+  origin: 'recipient' | 'item';        // Einstiegsrichtung A vs. B
+  itemRef?: { service: Service; itemId: number };   // nur bei origin='item' gesetzt
   createdAt: string;
   createdBy: string;
   items: Array<{
     recipientId: number;
+    sprache: Sprache;                  // aus Kontakte.Sprache, bestimmt Render-Sprache
     selectedExamples: Record<Service, number[]>;
     serviceEnabled: Record<Service, boolean>;
     overrides?: { salutation?: string; intro?: string; cta?: string };
+    skip?: boolean;                    // Empfänger aus Versandliste gestrichen
   }>;
 };
 ```
 
 **Abgeleitete UI-Regeln aus dem Schema:**
 
-- **Opt-out respektieren.** Empfänger mit `Keine Werbung senden = 1` oder `Aktiv = 0` dürfen im `RecipientPicker` nicht auswählbar sein — hart filtern, nicht nur visuell warnen.
-- **Sprache pro Empfänger.** `Sprache` bestimmt, ob `_D`- oder `_I`-Spalten im Mail-Render verwendet werden. Default-Template muss beide Varianten haben.
-- **Rollen-Filter.** Beim Picker standardmäßig nur Kontakte mit `Anbieter = 1` zeigen (das sind die typischen Werbeempfänger); `Ausscheiber` sind öffentliche Stellen, `Kunde` sind Bestandskunden — als Filter-Chips anbieten.
+- **Opt-out respektieren.** Empfänger mit `Keine Werbung senden = 1` oder `Aktiv = 0` dürfen im `RecipientPicker` und in den Matching-Vorschlägen nicht auftauchen — hart filtern, nicht nur visuell warnen. Der Filter läuft **serverseitig** (SQL-View und Matching-API). Beim Send-Call wird der Opt-out-Status **erneut** geprüft (gegen Änderungen zwischen Picker und Versand).
+- **Sprache pro Empfänger.** `Kontakte.Sprache` bestimmt, welche Variante des MJML-Templates gerendert wird und welche `_D`/`_I`-Spalten der Items verwendet werden. Ein Template mit zwei Sprachvarianten, kein zweisprachiger Inhalt pro Mail.
+- **Neu / Bestand / Alle als Segment-Toggle.** Abgrenzung über Rollen-Flags und `Ausschreibungen_Teilnehmer`-Historie (konkretes Mapping liefert der Backend-Task). Default: **Alle**. `Ausscheiber`-Rolle (öffentliche Stellen) als separater Filter-Chip, im Werbe-Kontext meist irrelevant.
 - **Geografie-Filter.** `inBezirk_d` und `inProvinz_i` sind die primären Region-Filter für die Matching-Logik.
 - **Gewerks-Matching** läuft über die `Unterkategorie`-Join-Tabellen; die Taxonomie wird aus `VectorDB_Oberkategorie_Unterkategorie` abgeleitet.
+- **Richtung B verlangt ein Item-Listing pro Service.** Der `ItemPicker` nutzt `/api/dummy/sql/items?service=…`. Die Matching-API erhält anschließend `{ service, itemId, … }` und liefert Empfängervorschläge mit Score.
 
 ---
 
@@ -268,16 +328,11 @@ type CampaignDraft = {
 
 ## 7. Auth & Rollen
 
-**Zugriff:** nur Bauservice-Mitarbeiter. Öffentlicher Endpoint gibt es nicht.
+**Zugriff:** nur Bauservice-Mitarbeiter (1–3 Personen). Öffentlicher Endpoint gibt es nicht.
 
-**Rollen-Vorschlag (minimal):**
+**Rollen:** keine Rollentrennung in Phase 1 — jeder eingeloggte Mitarbeiter kann alles. Wenn Bauservice später Admin-Funktionen (Nutzerverwaltung, Template-Pflege, Service-Defaults) benötigt, kommen diese mit dem Settings-Bereich in Phase 2 zurück.
 
-| Rolle | Berechtigungen |
-|---|---|
-| `admin` | Alles. Zusätzlich: Nutzerverwaltung, Template-Management, Service-Defaults |
-| `reviewer` | Kampagnen erstellen, reviewen, versenden. Kein Zugriff auf Einstellungen |
-
-**Auth-Verfahren:** In der Konzeptphase offen. Favorit: **Magic-Link via Resend/SMTP** (passwortlos, keine SSO-Integration nötig, DSGVO-unproblematisch). Alternativen: klassisch E-Mail+Passwort, oder SSO falls Bauservice einen IdP hat. Muss im Kickoff geklärt werden.
+**Auth-Verfahren:** Favorit **Magic-Link via Resend/SMTP** (passwortlos, keine SSO-Integration nötig, DSGVO-unproblematisch). Alternative für MVP: einfaches Basic-Auth-Middleware-Secret, falls Magic-Link-Infrastruktur erst später steht. Entscheidung im Kickoff.
 
 **Session:** HTTP-only Cookies, 7-Tage-Lifetime, Refresh bei jeder aktiven Nutzung.
 
@@ -285,24 +340,29 @@ type CampaignDraft = {
 
 ## 8. Offene Fragen an Bauservice
 
-Durch den Schema-Snapshot vom 20.04.2026 sind einige Ausgangsfragen bereits beantwortet:
+Durch den Schema-Snapshot vom 20.04.2026 und das Scope-Alignment (Rev 2) sind einige Ausgangsfragen bereits beantwortet:
 
 - **DBMS:** MySQL, bestätigt.
-- **Empfängerdaten:** interne Tabelle `VectorDB_Kontakte`, kein separates CRM nötig. CSV-Upload bleibt als Ergänzung denkbar, ist aber nicht Pflicht.
-- **Mehrsprachigkeit:** pro Empfänger über `Kontakte.Sprache` (DE/IT) und `_D`/`_I`-Spalten bereits strukturell vorgesehen. Templates müssen zweisprachig ausgeliefert werden.
-- **Opt-out-Handling:** Flag `Keine Werbung senden` in `VectorDB_Kontakte` — muss im Picker hart filtern und im Versand-Audit mitprotokolliert werden.
+- **Empfängerdaten:** interne Tabelle `VectorDB_Kontakte`, kein separates CRM nötig. **CSV-Upload ist aus Phase 1 gestrichen.**
+- **Mehrsprachigkeit:** eine Mail pro Empfänger in dessen Sprache (`Kontakte.Sprache`), ein MJML-Template mit DE/IT-Varianten.
+- **Opt-out-Handling:** Flag `Keine Werbung senden` in `VectorDB_Kontakte` — muss serverseitig in SQL-View und Matching-API hart gefiltert werden und im Send-Call erneut geprüft werden.
+- **Flow-Richtung:** beide Richtungen gleichberechtigt, bidirektionaler Einstieg (vgl. § 1).
+- **Review-Tiefe:** Individual-Editing pro Empfänger (vgl. § 1 und § 3).
+- **Settings-UI:** nicht in Phase 1; Templates und Defaults werden im Repo gepflegt.
+- **Rollen:** keine Trennung in Phase 1.
 
 Diese Punkte bleiben offen und müssen im Kickoff / Discovery geklärt werden:
 
-1. **View-Strategie.** Die `VectorDB_*`-Tabellen sind offenbar Aufbereitungs-Tabellen — werden sie periodisch befüllt (Batch-Job bei Bauservice) oder sind es Views auf Live-Daten? Wie oft aktualisieren? Sync-Intervall für Weaviate-Reindex abhängig davon.
-2. **Gewerks-Taxonomie.** Die Tabelle `VectorDB_Oberkategorie_Unterkategorie` strukturiert Gewerke. Gibt es Dokumentation / Anzahl der Kategorien? Für das Matching und die Filter-UI relevant.
-3. **Absender-Identität & DKIM.** Welche Absenderadresse(n)? Ist Mailjet-DKIM-Setup für `bauservice.it` bereits vorhanden?
-4. **Plain-Text-Fallback.** Muss ein Plain-Text-Part verpflichtend mitgehen (Deliverability-Best-Practice)?
-5. **Template-Anzahl bei Launch.** Ein Template mit Variablen oder mehrere (Neu-Akquise vs. Bestandskunden, DE vs. IT separate Templates)?
-6. **Auth-Verfahren & IdP.** Gibt es einen bestehenden IdP (Microsoft Entra, Google Workspace)? Sonst: Magic-Link ok?
-7. **Matching-Kriterien.** Gewerk/Region (`inBezirk_d`, `inProvinz_i`) sind über das Schema klar. Gibt es weitere (historische Aufträge aus `Ausschreibungen_Teilnehmer`, Umsatzklasse, Netzwerk-Zugehörigkeit)?
-8. **Versand-Audit.** Welche Daten müssen aus Compliance-Gründen pro Versand festgehalten werden (Versand-Zeitpunkt, gewählte Beispiele, Mitarbeiter-ID, Opt-out-Status zum Versandzeitpunkt)?
-9. **DB-Zugang für Produktion.** MySQL-Port ist von außen blockiert; phpMyAdmin-Scraping ist nur Interims-Lösung. Benötigt: VPN, SSH-Tunnel oder Firewall-Freischaltung plus dediziertes Read-only-Konto (nicht `thaler` — dessen Zugangsdaten über Plain-HTTP liefen, sollten rotiert werden).
+1. **View-Strategie.** Die `VectorDB_*`-Tabellen sind offenbar Aufbereitungs-Tabellen — werden sie periodisch befüllt (Batch-Job bei Bauservice) oder sind es Views auf Live-Daten? Wie oft aktualisieren? Sync-Intervall für Weaviate-Reindex abhängig davon. **(Matthias)**
+2. **Gewerks-Taxonomie.** Die Tabelle `VectorDB_Oberkategorie_Unterkategorie` strukturiert Gewerke. Gibt es Dokumentation / Anzahl der Kategorien? Für das Matching und die Filter-UI relevant. **(Matthias/Bauservice)**
+3. **Matching-Scoring.** Welche Score-Skala liefert die Matching-API (0–1, Prozent, bucketiert)? Soll der Score im Review-Screen sichtbar sein oder nur die Reihenfolge steuern? **(Matthias/Julian gemeinsam)**
+4. **Absender-Identität & DKIM.** Welche Absenderadresse(n)? Ist Mailjet-DKIM-Setup für `bauservice.it` bereits vorhanden? **(Bauservice)**
+5. **Plain-Text-Fallback.** Muss ein Plain-Text-Part verpflichtend mitgehen (Deliverability-Best-Practice)? Vermutlich ja. **(Julian klärt mit Mailjet-Doku)**
+6. **Unsubscribe-Link.** Jede Werbemail braucht einen funktionierenden Opt-out-Link (CAN-SPAM / DSGVO). Mechanik: Token-Link, der `Keine Werbung senden = 1` setzt. Wer baut den Endpoint? **(Julian FE-Link, Matthias DB-Write)**
+7. **Auth-Verfahren.** Magic-Link via Resend/SMTP als Default. Alternative: Basic-Auth für MVP. IdP-Existenz bei Bauservice prüfen. **(Kickoff)**
+8. **Matching-Kriterien.** Gewerk/Region sind über das Schema klar. Gibt es weitere (historische Aufträge aus `Ausschreibungen_Teilnehmer`, Umsatzklasse, Netzwerk-Zugehörigkeit)? **(Bauservice)**
+9. **Versand-Audit.** Welche Daten müssen aus Compliance-Gründen pro Versand festgehalten werden (Zeitpunkt, gewählte Beispiele, Mitarbeiter-ID, Opt-out-Status zum Versandzeitpunkt)? **(Bauservice)**
+10. **DB-Zugang für Produktion.** MySQL-Port ist von außen blockiert; phpMyAdmin-Scraping ist nur Interims-Lösung. Benötigt: VPN, SSH-Tunnel oder Firewall-Freischaltung plus dediziertes Read-only-Konto. Der bisherige Demo-Zugang lief über Plain-HTTP und ist zu ersetzen bzw. zu rotieren (Klartext-Credentials bleiben lokal, nicht im Repo). **(Bauservice/Matthias)**
 
 ---
 
@@ -311,10 +371,10 @@ Diese Punkte bleiben offen und müssen im Kickoff / Discovery geklärt werden:
 Alle Routen unter `app/api/dummy/*` liefern in Phase 1 statische bzw. pseudorandomisierte Responses mit den im Datenmodell (§ 5) beschriebenen Shapes. Das erlaubt, das Frontend komplett zu bauen und zu demonstrieren, ohne dass Weaviate, die Kundendaten-DB oder Mailjet produktiv angeschlossen sind.
 
 **Swap in Phase 2:**
-- `dummy/weaviate/examples` → Weaviate-Client mit semantischem Match
-- `dummy/sql/*` → Prisma/Drizzle gegen Bestands-Views
-- `dummy/render/mjml` → `mjml`-npm-Package serverseitig
-- `dummy/mailjet/send` → `node-mailjet`
+- `dummy/matching/examples` + `dummy/matching/recipients` → Weaviate-Client mit semantischem Match (Matthias)
+- `dummy/sql/*` → Prisma/Drizzle gegen Bestands-Views (Matthias)
+- `dummy/render/mjml` → `mjml`-npm-Package serverseitig (Julian)
+- `dummy/mailjet/send` → `node-mailjet` (Julian)
 
 Die Umstellung geschieht pro Integration isoliert, das Frontend bleibt unverändert.
 
