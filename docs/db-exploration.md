@@ -134,11 +134,12 @@ Temporäre Lösung im Frontend: `src/lib/fixtures/matching.ts` hält jetzt `bezi
 - **`0000-00-00`-Datumswerte** in `BeschlussDatum`.
 - **Sprache-Werte** sind natürliche Sprachnamen (`Deutsch`/`Italiano`/`English`), nicht ISO-Codes.
 - **Bezirk-Ausreisser** in `VectorDB_Ausschreibungen.Bezirk`: Neben Südtirol auch `Treviso`, `Belluno`, `Val d'Adige`, `Rotaliana-Königsberg` — reales Einzugsgebiet von Bauservice ist also nicht auf Südtirol beschränkt.
+- **`VectorDB_Ausschreibungen.Ausschreiber_id` ist KEINE saubere FK zu `VectorDB_Kontakte.id`** — Stichprobe über 15 aktuelle Ausschreibungen: 0/15 IDs existieren in `VectorDB_Kontakte`. Die Vergabestellen leben in einem separaten Namensraum (vermutlich Produktionsdatenbank-Ausschreiber-Tabelle), der nicht in den `VectorDB_*`-Snapshot gespiegelt ist. Beispiel: Ausschreibung `54` hat `Ausschreiber_id=4` (= Kontakt "Gemeinde Ahrntal" — funktioniert), Ausschreibung `89848` hat `Ausschreiber_id=32557` (= nicht in Kontakte). Endpoint muss entweder (a) eine separate Ausschreiber-Tabelle mitliefern oder (b) `Ausschreiber_id` auflösen und den Namen direkt serialisieren. Das gleiche gilt wahrscheinlich für `Projektant_id`, `Vergabestelle_id`, `Bauleiter`, `HSLPlaner`, `ElektroPlaner`.
 
 ## 5 Was jetzt im Frontend lebt
 
 - `src/lib/fixtures/recipients.ts`: **80 echte anonymisierte Kontakte** (15 Ausschreiber, 18 Kunden, 78 Anbieter; 48 DE / 32 IT; Bezirke Bozen, Überetsch Unterland, Pustertal, Eisacktal, Burggrafenamt). Emails auf `demo-<id>@example.test` umgestellt, damit der Demo-Send-Flow niemanden real erreicht. Namen, Bezirke und Rollen-Flags sind original.
-- `src/lib/fixtures/items.ts`: **15 echte Ausschreibungen** mit Gewerk aus Oberkategorie-Join. Bezirk übersetzt (Südtirol) bzw. im Original belassen (Veneto/Trentino). Ergebnisse/Beschlüsse/Konzessionen bleiben **vorerst auf je 4 Fixtures** — der DB-Server (`167.235.240.105`) war beim Pull länger nicht erreichbar. Wenn wieder verfügbar, per gleicher Query-Logik auf 12–15 Stück heben.
+- `src/lib/fixtures/items.ts`: **15 echte Ausschreibungen** mit aufgelöstem `ausschreiberName` (Join über `VectorDB_Kontakte`), `gewerk` + `kategorien` aus Oberkategorie-Join, `nummer` aus CIG. Nur Einträge gewählt, deren `Ausschreiber_id` in Kontakte existiert — dadurch beschränkt auf ~3 distinkte Ausschreiber (Gemeinde Ahrntal, Stadtwerke Brixen, Etschwerke). Ergebnisse/Beschlüsse/Konzessionen bleiben **vorerst auf je 4 Fixtures**.
 - `src/lib/fixtures/matching.ts`: Gewerk-Zuordnung leitet sich aus Keyword-Matching auf Firmenname ab, bis der Endpoint `gewerke[]` pro Kontakt liefert. Bezirk-Matching nutzt IT→DE-Map.
 
 ## 6 Offene Fragen an Matthias
@@ -149,3 +150,4 @@ Temporäre Lösung im Frontend: `src/lib/fixtures/matching.ts` hält jetzt `bezi
 4. **Aktualisierung**: Sind die `VectorDB_*`-Tabellen batchbefüllte Snapshots oder Views auf die Produktion? Frequenz?
 5. **`hatHistorie`**-Definition: Reicht "Teilnehmer bei ≥ 1 Ausschreibung"? Oder soll auch "Gewinner bei ≥ 1" / "als Projektant/Bauleiter/… in Projektierungen geführt" zählen?
 6. **Audit-Felder**: Endpoint sollte optional `last_updated`, `source_ts` mitliefern, damit das Frontend im UI klar macht, wie alt ein Datensatz ist.
+7. **Ausschreiber-/Vergabestellen-Auflösung**: Gibt es im Produktivsystem eine dedizierte Vergabestellen-Tabelle, auf die `Ausschreiber_id` zeigt? Dann bitte mitspiegeln oder im Endpoint als `ausschreiberName` serialisieren. Ohne diese Auflösung bleibt die "Ausschreiber"-Spalte im Services-UI für die Mehrheit der Einträge leer.
