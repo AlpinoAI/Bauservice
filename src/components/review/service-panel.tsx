@@ -21,6 +21,7 @@ export function ServicePanel({ recipientId, service, pinnedExampleId }: Props) {
   const toggleService = useCampaignStore((s) => s.toggleService);
   const removeExample = useCampaignStore((s) => s.removeExample);
   const setExamples = useCampaignStore((s) => s.setExamplesFor);
+  const setExampleCount = useCampaignStore((s) => s.setExampleCount);
   const [swapOpen, setSwapOpen] = useState<number | null>(null);
 
   if (!draft) return null;
@@ -38,22 +39,40 @@ export function ServicePanel({ recipientId, service, pinnedExampleId }: Props) {
         !enabled && "opacity-60"
       )}
     >
-      <header className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 px-4 py-3">
         <div className="flex items-center gap-3">
           <h3 className="text-sm font-semibold">{serviceLabels[service]}</h3>
           <span className="text-xs text-zinc-500">
             {selected.length} {selected.length === 1 ? "Eintrag" : "Einträge"}
           </span>
         </div>
-        <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-zinc-600">
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
-            checked={enabled}
-            onChange={() => toggleService(recipientId, service)}
-          />
-          <span>Im Email anzeigen</span>
-        </label>
+        <div className="flex items-center gap-4">
+          <label className="inline-flex items-center gap-2 text-xs text-zinc-600">
+            <span>Anzahl</span>
+            <input
+              type="number"
+              min={0}
+              max={pool.length}
+              value={selected.length}
+              disabled={!enabled || pool.length === 0}
+              onChange={(e) => {
+                const next = Number.parseInt(e.target.value, 10);
+                if (Number.isFinite(next)) setExampleCount(recipientId, service, next);
+              }}
+              className="h-7 w-14 rounded border border-zinc-200 bg-white px-2 text-right text-xs text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400"
+            />
+            <span className="text-[10px] text-zinc-400">/ {pool.length}</span>
+          </label>
+          <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-zinc-600">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+              checked={enabled}
+              onChange={() => toggleService(recipientId, service)}
+            />
+            <span>Im Email anzeigen</span>
+          </label>
+        </div>
       </header>
 
       {enabled && (

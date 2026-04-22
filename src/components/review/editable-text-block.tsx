@@ -2,10 +2,10 @@
 
 import type { RecipientDraft } from "@/lib/campaign-store";
 import { useCampaignStore } from "@/lib/campaign-store";
-import { scenarioCopy } from "@/lib/scenarios";
+import { getContent } from "@/lib/email-template-content";
 import type { EmailOverrides } from "@/lib/types";
 
-type Key = Exclude<keyof EmailOverrides, "bodyHtml" | "subject">;
+type Key = Exclude<keyof EmailOverrides, "bodyHtml" | "subject" | "senderName">;
 
 const labels: Record<Key, { title: string; hint: string }> = {
   salutation: {
@@ -34,13 +34,13 @@ type Props = {
 export function EditableTextBlock({ recipientId, draft }: Props) {
   const setOverride = useCampaignStore((s) => s.setOverride);
   const keys: Key[] = ["salutation", "hook", "bridge", "cta"];
-  const copy = scenarioCopy[draft.scenarioId][draft.sprache];
+  const scenario = getContent(draft.sprache).scenarios[draft.scenarioId];
 
   const placeholders: Record<Key, string> = {
-    salutation: copy.salutationFallback,
-    hook: copy.hook,
-    bridge: copy.bridge,
-    cta: copy.cta,
+    salutation: scenario.salutationFallback,
+    hook: scenario.hook,
+    bridge: scenario.bridge,
+    cta: scenario.ctaClosing,
   };
 
   return (

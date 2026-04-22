@@ -1,12 +1,15 @@
-import type { Recipient } from "@/lib/types";
+import type { Ansprechpartner, Recipient } from "@/lib/types";
 
 // Stammdaten: 80 anonymisierte Einträge aus VectorDB_Kontakte (2026-04-22 Snapshot).
 // Emails durchgehend auf <id>@example.test gesetzt, damit der Demo-Send-Flow
 // keine realen Empfänger erreicht. Namen, Bezirke und Rollen-Flags sind echt.
 // gewerke: aus VectorDB_Kontakte.Unterkategorie_wird_zusammengeführt → Oberkat →
 // kanonischer Gewerk-Label (filter-options.ts). 76 von 80 Kontakten haben ein Gewerk.
+// ansprechpartner: nach Export via parseAnsprechpartner() best-effort aus nameDe
+// abgeleitet (Ing./Arch./Geom./Dr.-Pattern). In Production liefert Matthias die
+// Felder direkt aus VectorDB_Kontakte (Vorname, Nachname, Geschlecht, Anrede_i).
 
-export const recipientsFixture: Recipient[] = [
+const baseRecipients: Recipient[] = [
   {
     id: 4,
     nameDe: "Gemeinde Ahrntal",
@@ -1174,6 +1177,81 @@ export const recipientsFixture: Recipient[] = [
     hatHistorie: false,
   },
 ];
+
+// Titel-Patterns in nameDe: "Ing.", "Arch.", "Geom.", "Dipl.-Ing.", "Dr.", "Prof."
+const titelPrefixPattern = /^(?<titel>Ing\.|Arch\.|Geom\.|Dipl\.-Ing\.|Dr\.|Prof\.)\s+(?<nachname>\S+)\s+(?<vorname>.+)$/;
+const titelInfixPattern = /^(?<nachname>\S+)\s+(?<titel>Ing\.|Arch\.|Geom\.|Dipl\.-Ing\.|Dr\.|Prof\.)\s+(?<vorname>.+)$/;
+
+// Minimale Geschlechts-Heuristik für italienisch/deutsche Vornamen. Wenn unsicher
+// → undefined, wodurch der Anrede-Block auf Firmen-Fallback zurückfällt (sicherer
+// als falsches Geschlecht in einer Werbemail).
+const femaleFirstNames = new Set([
+  "Sigrid",
+  "Sabine",
+  "Maria",
+  "Anna",
+  "Elisabetta",
+  "Francesca",
+  "Julia",
+  "Sara",
+  "Chiara",
+  "Laura",
+  "Silvia",
+  "Barbara",
+]);
+
+const maleFirstNames = new Set([
+  "Giovanni",
+  "Carlo",
+  "Stefano",
+  "Marco",
+  "Luca",
+  "Alessandro",
+  "Matteo",
+  "Franco",
+  "Adriano",
+  "Tiziano",
+  "Eugenio",
+  "Pauli",
+  "Paul",
+  "Alfred",
+  "Werner",
+  "Karl",
+  "Heinz",
+  "Hansjörg",
+  "Giorgio",
+  "Silvano",
+  "Valerio",
+  "Johann",
+  "Hubert",
+  "Thomas",
+  "Roland",
+  "Josef",
+  "Manfred",
+]);
+
+function guessAnrede(vorname: string): "Herr" | "Frau" | undefined {
+  const first = vorname.split(/\s+/)[0];
+  if (femaleFirstNames.has(first)) return "Frau";
+  if (maleFirstNames.has(first)) return "Herr";
+  return undefined;
+}
+
+function parseAnsprechpartner(nameDe: string): Ansprechpartner | undefined {
+  const match =
+    nameDe.match(titelPrefixPattern) ?? nameDe.match(titelInfixPattern);
+  if (!match?.groups) return undefined;
+  const { titel, nachname, vorname } = match.groups;
+  const anrede = guessAnrede(vorname);
+  if (!anrede) return undefined;
+  return { titel, nachname, vorname, anrede };
+}
+
+export const recipientsFixture: Recipient[] = baseRecipients.map((r) => {
+  if (r.ansprechpartner) return r;
+  const parsed = parseAnsprechpartner(r.nameDe);
+  return parsed ? { ...r, ansprechpartner: parsed } : r;
+});
 
 export function segmentFilter(
   r: Recipient,

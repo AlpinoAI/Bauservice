@@ -8,6 +8,17 @@ export type Sprache = "de" | "it";
 
 export type ScenarioId = "A" | "B" | "C" | "D";
 
+export const DEFAULT_SCENARIO_ID: ScenarioId = "D";
+
+export type Ansprechpartner = {
+  /** Aus VectorDB_Kontakte.Geschlecht abgeleitet. Steuert "Herr/Frau" bzw. "Signor/Signora". */
+  anrede: "Herr" | "Frau";
+  vorname?: string;
+  nachname: string;
+  /** Berufstitel aus VectorDB_Kontakte.Anrede_i — z.B. "Ing.", "Arch.", "Geom.". */
+  titel?: string;
+};
+
 export type Recipient = {
   id: number;
   nameDe: string;
@@ -18,6 +29,7 @@ export type Recipient = {
   bezirkDe?: string;
   provinz?: string;
   gewerke?: string[];
+  ansprechpartner?: Ansprechpartner;
   rollen: {
     ausschreiber: boolean;
     anbieter: boolean;
@@ -122,6 +134,8 @@ export type EmailOverrides = {
   bodyHtml?: string;
   /** Subject-line override from the editor. */
   subject?: string;
+  /** Name of the human sender shown in the signature block. */
+  senderName?: string;
 };
 
 export type RenderPayload = {
@@ -129,16 +143,23 @@ export type RenderPayload = {
   sprache: Sprache;
   scenarioId?: ScenarioId;
   payload: {
-    recipient: { nameDe: string; nameIt: string };
+    recipient: {
+      nameDe: string;
+      nameIt: string;
+      ansprechpartner?: Ansprechpartner;
+    };
     examples: Record<Service, Example[]>;
     serviceEnabled: Record<Service, boolean>;
     overrides?: EmailOverrides;
+    /** Resolves `{itemTitle}` placeholders in subject and trigger openings. */
+    pinnedExample?: Example;
   };
 };
 
 export type RenderResult = {
   html: string;
   text: string;
+  subject: string;
 };
 
 export type SendResult = {
