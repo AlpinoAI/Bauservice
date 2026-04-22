@@ -15,11 +15,10 @@ import type { RecipientDraft } from "@/lib/campaign-store";
 import { buildDraftForRecipient } from "@/lib/build-draft-for-recipient";
 import { Badge } from "@/components/ui/badge";
 import { RecipientTabs } from "./recipient-tabs";
-import { ServicePanel } from "./service-panel";
+import { ServiceTabsPanel } from "./service-tabs-panel";
+import { ItemContactsTable } from "./item-contacts-table";
 import { EmailPreview } from "./email-preview";
 import { ApprovalBar } from "./approval-bar";
-import { EditableTextBlock } from "./editable-text-block";
-import { ScenarioSelector } from "./scenario-selector";
 import { RecipientSwapSheet } from "./recipient-swap-sheet";
 import { CampaignStepper } from "@/components/campaign-stepper";
 import { servicesOrder, serviceLabels } from "@/lib/filter-options";
@@ -194,7 +193,8 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
     );
   }
 
-  const pinnedService = campaign.origin === "item" ? campaign.itemRef?.service : undefined;
+  const pinnedService =
+    campaign.origin === "item" ? campaign.itemRef?.service : undefined;
   const pinnedExampleId =
     campaign.origin === "item" && campaign.itemRef && activeDraft
       ? activeDraft.selectedExamples[campaign.itemRef.service].includes(
@@ -206,6 +206,7 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
 
   const list = Object.values(drafts);
   const toSend = list.filter((d) => !d.skip);
+  const isItemFlow = campaign.origin === "item";
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -236,50 +237,53 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
           </div>
         </header>
 
-        <ScenarioSelector />
-
-        <div className="mt-4 flex items-center justify-between gap-3">
-          <p className="text-xs text-zinc-500">
-            {list.length} Empfänger in dieser Kampagne. Du kannst weitere
-            Kontakte über die Suche hinzufügen oder per Matching finden.
-          </p>
-          <button
-            type="button"
-            onClick={() => setSwapOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-blue-500 hover:text-blue-700"
-          >
-            <UserPlus size={12} /> Empfänger suchen &amp; hinzufügen
-          </button>
-        </div>
-
-        <RecipientTabs />
-
-        {activeDraft ? (
-          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_520px]">
-            <div className="space-y-4">
-              <EditableTextBlock
-                recipientId={activeDraft.recipientId}
-                draft={activeDraft}
-              />
-              {servicesOrder.map((svc) => (
-                <ServicePanel
-                  key={svc}
-                  recipientId={activeDraft.recipientId}
-                  service={svc}
-                  pinnedExampleId={
-                    pinnedService === svc ? pinnedExampleId : undefined
-                  }
-                />
-              ))}
-            </div>
+        {isItemFlow ? (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_520px]">
+            <ItemContactsTable campaign={campaign} />
             <div className="lg:sticky lg:top-4 lg:self-start">
-              <EmailPreview recipientId={activeDraft.recipientId} />
+              {activeDraft ? (
+                <EmailPreview recipientId={activeDraft.recipientId} />
+              ) : (
+                <div className="rounded-lg border border-zinc-200 bg-white p-10 text-center text-sm text-zinc-500">
+                  Wähle links einen Kontakt für die Vorschau.
+                </div>
+              )}
             </div>
           </div>
         ) : (
-          <div className="mt-4 rounded-lg border border-zinc-200 bg-white p-10 text-center text-sm text-zinc-500">
-            Keine Empfänger in der Kampagne.
-          </div>
+          <>
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <p className="text-xs text-zinc-500">
+                {list.length} Empfänger in dieser Kampagne.
+              </p>
+              <button
+                type="button"
+                onClick={() => setSwapOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-blue-500 hover:text-blue-700"
+              >
+                <UserPlus size={12} /> Empfänger suchen &amp; hinzufügen
+              </button>
+            </div>
+
+            <RecipientTabs />
+
+            {activeDraft ? (
+              <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_520px]">
+                <ServiceTabsPanel
+                  recipientId={activeDraft.recipientId}
+                  pinnedService={pinnedService}
+                  pinnedExampleId={pinnedExampleId}
+                />
+                <div className="lg:sticky lg:top-4 lg:self-start">
+                  <EmailPreview recipientId={activeDraft.recipientId} />
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-lg border border-zinc-200 bg-white p-10 text-center text-sm text-zinc-500">
+                Keine Empfänger in der Kampagne.
+              </div>
+            )}
+          </>
         )}
       </div>
 
