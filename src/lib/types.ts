@@ -8,6 +8,8 @@ export type Sprache = "de" | "it";
 
 export type ScenarioId = "A" | "B" | "C" | "D";
 
+export const DEFAULT_SCENARIO_ID: ScenarioId = "D";
+
 export type Recipient = {
   id: number;
   nameDe: string;
@@ -122,6 +124,8 @@ export type EmailOverrides = {
   bodyHtml?: string;
   /** Subject-line override from the editor. */
   subject?: string;
+  /** Name of the human sender shown in the signature block. */
+  senderName?: string;
 };
 
 export type RenderPayload = {
@@ -133,12 +137,15 @@ export type RenderPayload = {
     examples: Record<Service, Example[]>;
     serviceEnabled: Record<Service, boolean>;
     overrides?: EmailOverrides;
+    /** Resolves `{itemTitle}` placeholders in subject and trigger openings. */
+    pinnedExample?: Example;
   };
 };
 
 export type RenderResult = {
   html: string;
   text: string;
+  subject: string;
 };
 
 export type SendResult = {

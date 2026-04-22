@@ -31,7 +31,7 @@ type CampaignState = {
   drafts: Record<number, RecipientDraft>;
   examplesByService: Record<Service, PoolExample[]>;
   activeRecipientId: number | null;
-  renderCache: Record<number, { html: string; text: string }>;
+  renderCache: Record<number, { html: string; text: string; subject: string }>;
   isDirty: boolean;
   loading: boolean;
 };
@@ -65,7 +65,12 @@ type CampaignActions = {
   ) => void;
   toggleSkip: (recipientId: number) => void;
   addToPool: (service: Service, examples: PoolExample[]) => void;
-  setRender: (recipientId: number, html: string, text: string) => void;
+  setRender: (
+    recipientId: number,
+    html: string,
+    text: string,
+    subject: string
+  ) => void;
   reset: () => void;
 };
 
@@ -232,8 +237,10 @@ export const useCampaignStore = create<CampaignState & CampaignActions>(
         };
       }),
 
-    setRender: (rid, html, text) =>
-      set((s) => ({ renderCache: { ...s.renderCache, [rid]: { html, text } } })),
+    setRender: (rid, html, text, subject) =>
+      set((s) => ({
+        renderCache: { ...s.renderCache, [rid]: { html, text, subject } },
+      })),
 
     reset: () => set(initialState),
   })

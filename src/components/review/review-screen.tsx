@@ -27,9 +27,15 @@ type RenderPayloadInput = {
   draft: RecipientDraft;
   pool: Record<Service, Example[]>;
   scenarioId: ScenarioId;
+  itemRef?: Campaign["itemRef"];
 };
 
-function buildRenderPayload({ draft, pool, scenarioId }: RenderPayloadInput) {
+function buildRenderPayload({
+  draft,
+  pool,
+  scenarioId,
+  itemRef,
+}: RenderPayloadInput) {
   const examples: Record<Service, Example[]> = {
     ausschreibungen: [],
     ergebnisse: [],
@@ -41,6 +47,9 @@ function buildRenderPayload({ draft, pool, scenarioId }: RenderPayloadInput) {
       .map((id) => pool[svc].find((e) => e.id === id))
       .filter((e): e is Example => !!e);
   }
+  const pinnedExample = itemRef
+    ? pool[itemRef.service].find((e) => e.id === itemRef.itemId)
+    : undefined;
   return {
     templateId: "default",
     sprache: draft.sprache,
@@ -53,6 +62,7 @@ function buildRenderPayload({ draft, pool, scenarioId }: RenderPayloadInput) {
       examples,
       serviceEnabled: draft.serviceEnabled,
       overrides: draft.overrides,
+      pinnedExample,
     },
   };
 }
@@ -135,8 +145,9 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
       ov: activeDraft.overrides,
       sp: activeDraft.sprache,
       sc: activeDraft.scenarioId,
+      ir: campaign?.itemRef ?? null,
     });
-  }, [activeDraft]);
+  }, [activeDraft, campaign?.itemRef]);
 
   useEffect(() => {
     if (!renderKey) return;
@@ -149,6 +160,7 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
         draft,
         pool: state.examplesByService,
         scenarioId: draft.scenarioId,
+        itemRef: state.campaign?.itemRef,
       });
       try {
         const res = await fetch("/api/dummy/render/mjml", {
@@ -157,8 +169,12 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
           body: JSON.stringify(payload),
         });
         if (!res.ok) return;
-        const data = (await res.json()) as { html: string; text: string };
-        state.setRender(draft.recipientId, data.html, data.text);
+        const data = (await res.json()) as {
+          html: string;
+          text: string;
+          subject: string;
+        };
+        state.setRender(draft.recipientId, data.html, data.text, data.subject);
       } catch {
         // ignore
       }

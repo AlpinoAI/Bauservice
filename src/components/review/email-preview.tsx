@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pencil, Save, X } from "lucide-react";
 import { useCampaignStore } from "@/lib/campaign-store";
-import { scenarioCopy } from "@/lib/scenarios";
+import { getContent } from "@/lib/email-template-content";
+import { DEFAULT_SCENARIO_ID } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Props = { recipientId: number };
@@ -22,11 +23,15 @@ export function EmailPreview({ recipientId }: Props) {
   const editorRef = useRef<HTMLDivElement | null>(null);
 
   const sprache = draft?.sprache ?? "de";
-  const scenarioId = draft?.scenarioId ?? "D";
-  const copy = scenarioCopy[scenarioId][sprache];
+  const scenarioId = draft?.scenarioId ?? DEFAULT_SCENARIO_ID;
 
   const subjectOverride = draft?.overrides.subject;
-  const subject = subjectOverride || copy.subject;
+  // Rendered subject reflects scenario + {itemTitle} resolution; fall back to raw
+  // scenario subject while the first render is pending.
+  const subject =
+    subjectOverride ||
+    rendered?.subject ||
+    getContent(sprache).scenarios[scenarioId].subject;
   const name = draft
     ? draft.sprache === "it"
       ? draft.recipient.nameIt

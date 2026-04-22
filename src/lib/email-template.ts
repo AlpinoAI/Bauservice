@@ -1,23 +1,31 @@
 import { convert as htmlToText } from "html-to-text";
-import type { Example, RenderPayload, ScenarioId, Service } from "@/lib/types";
+import type {
+  AusschreibungExample,
+  BeschlussExample,
+  ErgebnisExample,
+  Example,
+  KonzessionExample,
+  RenderPayload,
+  RenderResult,
+  ScenarioId,
+  Service,
+  Sprache,
+} from "@/lib/types";
+import { DEFAULT_SCENARIO_ID } from "@/lib/types";
 import { servicesOrder } from "@/lib/filter-options";
-import { scenarioCopy } from "@/lib/scenarios";
+import { formatCurrency } from "@/lib/format";
+import {
+  DESCRIPTION_CUT_CHARS,
+  getContent,
+  type ContentPack,
+  type MetaLabels,
+  type ScenarioContent,
+  type Signature,
+} from "@/lib/email-template-content";
 
-const TEMPLATE_VERSION = "v5-customer-type";
+const TEMPLATE_VERSION = "v6-polish";
 
-const serviceLabelDe: Record<Service, string> = {
-  ausschreibungen: "Aktuelle Ausschreibungen",
-  ergebnisse: "Ergebnisse & Zuschläge",
-  beschluesse: "Beschlüsse & Projekte",
-  baukonzessionen: "Baukonzessionen",
-};
-
-const serviceLabelIt: Record<Service, string> = {
-  ausschreibungen: "Gare in corso",
-  ergebnisse: "Esiti e aggiudicazioni",
-  beschluesse: "Delibere e progetti",
-  baukonzessionen: "Concessioni edilizie",
-};
+type MetaRow = { label: string; value: string };
 
 function escape(s: string): string {
   return s
@@ -27,87 +35,167 @@ function escape(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function describe(it: Example, sprache: "de" | "it"): string {
-  return sprache === "it" ? it.beschreibungIt : it.beschreibungDe;
+function describe(ex: Example, sprache: Sprache): string {
+  const raw = sprache === "it" ? ex.beschreibungIt : ex.beschreibungDe;
+  if (raw.length <= DESCRIPTION_CUT_CHARS) return raw;
+  return raw.slice(0, DESCRIPTION_CUT_CHARS).trimEnd() + "…";
 }
 
-function formatCurrency(value: number, locale: string): string {
+function percent(value: number | undefined, locale: string): string | null {
+  if (typeof value !== "number") return null;
   return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0,
-  }).format(value);
+    style: "percent",
+    maximumFractionDigits: 2,
+  }).format(value / 100);
 }
 
-function exampleMeta(
-  it: Example,
-  sprache: "de" | "it"
-): { label: string; value: string }[] {
-  const locale = sprache === "it" ? "it-IT" : "de-DE";
-  const meta: { label: string; value: string }[] = [];
-  if (it.datum) {
-    meta.push({
-      label: sprache === "it" ? "Data" : "Datum",
-      value: it.datum,
-    });
+function pushMeta(
+  meta: MetaRow[],
+  label: string,
+  value: string | undefined | null
+): void {
+  if (value === undefined || value === null || value === "") return;
+  meta.push({ label, value });
+}
+
+function metaForAusschreibung(
+  ex: AusschreibungExample,
+  labels: MetaLabels,
+  locale: string
+): MetaRow[] {
+  const meta: MetaRow[] = [];
+  pushMeta(meta, labels.ausschreiber, ex.ausschreiberName);
+  pushMeta(meta, labels.gewerk, ex.gewerk);
+  pushMeta(meta, labels.bezirk, ex.bezirk);
+  pushMeta(meta, labels.vergabeBetrag, formatCurrency(ex.betrag, locale));
+  return meta;
+}
+
+function metaForErgebnis(
+  ex: ErgebnisExample,
+  sprache: Sprache,
+  labels: MetaLabels,
+  locale: string
+): MetaRow[] {
+  const meta: MetaRow[] = [];
+  pushMeta(meta, labels.ausschreiber, ex.ausschreiberName);
+  pushMeta(meta, labels.gewerk, ex.gewerk);
+  pushMeta(meta, labels.bezirk, ex.bezirk);
+  pushMeta(meta, labels.vergabeBetrag, formatCurrency(ex.ausschreibungBetrag, locale));
+  const gewinner = sprache === "it" ? ex.teilnehmerNameIt : ex.teilnehmerNameDe;
+  const zuschlagBetrag = formatCurrency(ex.betrag, locale);
+  const nachlass = percent(ex.prozent, locale);
+  if (gewinner) {
+    const suffix = [zuschlagBetrag, nachlass].filter(Boolean).join(" · ");
+    pushMeta(
+      meta,
+      labels.zuschlagAn,
+      suffix ? `${gewinner} (${suffix})` : gewinner
+    );
   }
-  if (it.bezirk) {
-    meta.push({
-      label: sprache === "it" ? "Zona" : "Bezirk",
-      value: it.bezirk,
-    });
-  }
-  if ("betrag" in it && typeof it.betrag === "number") {
-    meta.push({
-      label: sprache === "it" ? "Importo" : "Betrag",
-      value: formatCurrency(it.betrag, locale),
-    });
-  }
-  if (it.gewerk) {
-    meta.push({
-      label: sprache === "it" ? "Categoria" : "Gewerk",
-      value: it.gewerk,
-    });
+  if (ex.datum) {
+    const idSuffix = ex.nummer ? ` (ID ${ex.nummer})` : "";
+    pushMeta(meta, labels.bekanntmachung, `${ex.datum}${idSuffix}`);
   }
   return meta;
 }
 
-function buildExampleCard(it: Example, sprache: "de" | "it"): string {
-  const meta = exampleMeta(it, sprache);
-  const metaRow = meta.length
-    ? `<div style="margin-bottom:6px;font-size:12px;color:#64748b;">${meta
-        .map(
-          (m) =>
-            `<span style="display:inline-block;margin-right:14px;"><strong style="color:#475569;">${escape(m.label)}:</strong> ${escape(m.value)}</span>`
-        )
-        .join("")}</div>`
-    : "";
+function metaForBeschluss(
+  ex: BeschlussExample,
+  labels: MetaLabels,
+  locale: string
+): MetaRow[] {
+  const meta: MetaRow[] = [];
+  pushMeta(meta, labels.ausschreiber, ex.ausschreiberName);
+  pushMeta(meta, labels.status, ex.status);
+  pushMeta(meta, labels.beschlussNr, ex.beschlussNr);
+  pushMeta(meta, labels.beschlussDatum, ex.beschlussDatum);
+  pushMeta(meta, labels.gewerk, ex.gewerk);
+  pushMeta(meta, labels.bezirk, ex.bezirk);
+  pushMeta(
+    meta,
+    labels.geschaetzterBetrag,
+    formatCurrency(ex.geschaetzterBetrag ?? ex.betrag, locale)
+  );
+  return meta;
+}
+
+function metaForKonzession(
+  ex: KonzessionExample,
+  labels: MetaLabels
+): MetaRow[] {
+  const meta: MetaRow[] = [];
+  pushMeta(meta, labels.gemeinde, ex.gemeinde);
+  pushMeta(meta, labels.konzessionsTyp, ex.konzessionenTyp);
+  pushMeta(meta, labels.bauherr, ex.name);
+  pushMeta(meta, labels.bezirk, ex.bezirk);
+  pushMeta(meta, labels.datum, ex.datum);
+  return meta;
+}
+
+function metaFor(
+  ex: Example,
+  sprache: Sprache,
+  labels: MetaLabels,
+  locale: string
+): MetaRow[] {
+  switch (ex.service) {
+    case "ausschreibungen":
+      return metaForAusschreibung(ex, labels, locale);
+    case "ergebnisse":
+      return metaForErgebnis(ex, sprache, labels, locale);
+    case "beschluesse":
+      return metaForBeschluss(ex, labels, locale);
+    case "baukonzessionen":
+      return metaForKonzession(ex, labels);
+  }
+}
+
+function buildExampleBlock(
+  ex: Example,
+  sprache: Sprache,
+  pack: ContentPack
+): string {
+  const meta = metaFor(ex, sprache, pack.metaLabels, pack.locale);
+  const metaLines = meta
+    .map(
+      (m) =>
+        `<div style="font-size:12px;line-height:1.5;color:#475569;"><strong style="color:#334155;font-weight:600;">${escape(m.label)}:</strong> ${escape(m.value)}</div>`
+    )
+    .join("");
   return `
       <tr>
-        <td style="padding:6px 0 10px 0;">
-          <div style="border-left:3px solid #2563eb;padding:10px 14px;background:#f8fafc;border-radius:4px;">
-            ${metaRow}
-            <div style="font-size:14px;line-height:1.55;color:#0f172a;">${escape(describe(it, sprache))}</div>
-          </div>
+        <td style="padding:10px 0 6px 0;">
+          ${metaLines}
+          <div style="margin-top:6px;font-size:14px;line-height:1.55;color:#0f172a;">${escape(describe(ex, sprache))}</div>
         </td>
       </tr>`;
 }
 
 function buildSection(
-  label: string,
-  items: Example[],
-  sprache: "de" | "it"
+  heading: string,
+  examples: Example[],
+  sprache: Sprache,
+  pack: ContentPack
 ): string {
-  if (items.length === 0) return "";
-  const cards = items.map((it) => buildExampleCard(it, sprache)).join("");
+  if (examples.length === 0) return "";
+  const blocks: string[] = [];
+  examples.forEach((ex, idx) => {
+    if (idx > 0) {
+      blocks.push(
+        `<tr><td style="padding:8px 0;"><hr style="border:0;border-top:1px solid #e4e4e7;margin:0;" /></td></tr>`
+      );
+    }
+    blocks.push(buildExampleBlock(ex, sprache, pack));
+  });
   return `
     <tr>
-      <td style="padding-top:22px;padding-bottom:8px;font-size:14px;font-weight:600;color:#0f172a;letter-spacing:-0.01em;">${escape(label)}</td>
+      <td style="padding-top:22px;padding-bottom:4px;font-size:14px;font-weight:600;color:#0f172a;letter-spacing:-0.01em;">${escape(heading)}</td>
     </tr>
     <tr>
       <td>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-          ${cards}
+          ${blocks.join("")}
         </table>
       </td>
     </tr>`;
@@ -115,21 +203,20 @@ function buildSection(
 
 function buildSalutation(
   payload: RenderPayload["payload"],
-  sprache: "de" | "it",
-  scenarioId: ScenarioId
+  sprache: Sprache,
+  scenario: ScenarioContent
 ): string {
   const override = payload.overrides?.salutation;
   if (override) return escape(override);
-  const copy = scenarioCopy[scenarioId][sprache];
   const recipient =
     sprache === "it" ? payload.recipient.nameIt : payload.recipient.nameDe;
   if (recipient && recipient.trim().length > 0) {
-    return `${escape(copy.salutationPrefix)} <strong>${escape(recipient)}</strong>,`;
+    return `${escape(scenario.salutationPrefix)} <strong>${escape(recipient)}</strong>,`;
   }
-  return escape(copy.salutationFallback);
+  return escape(scenario.salutationFallback);
 }
 
-function buildValuePropsList(items: string[]): string {
+function buildValueProps(items: string[]): string {
   const lis = items
     .map(
       (text, idx) =>
@@ -146,7 +233,43 @@ function buildValuePropsList(items: string[]): string {
     </tr>`;
 }
 
-function wrapDocument(sprache: string, innerBody: string): string {
+function buildSignature(signature: Signature, senderName: string): string {
+  const lines = [
+    senderName,
+    "",
+    signature.companyLine,
+    signature.streetLine,
+    signature.cityLine,
+    `Tel. ${signature.tel} · Fax ${signature.fax}`,
+    `${signature.email} · ${signature.website}`,
+  ];
+  return lines
+    .map((line) =>
+      line === ""
+        ? `<div style="height:8px;">&nbsp;</div>`
+        : `<div style="font-size:12px;line-height:1.55;color:#475569;">${escape(line)}</div>`
+    )
+    .join("");
+}
+
+function resolveSubject(
+  scenario: ScenarioContent,
+  pinnedExample: Example | undefined,
+  sprache: Sprache,
+  overrideSubject: string | undefined
+): string {
+  if (overrideSubject && overrideSubject.trim().length > 0) return overrideSubject;
+  if (!scenario.subject.includes("{itemTitle}")) return scenario.subject;
+  const fallback = scenario.preview;
+  const title = pinnedExample ? describe(pinnedExample, sprache) : fallback;
+  return scenario.subject.replace("{itemTitle}", title);
+}
+
+function buildPreheader(text: string): string {
+  return `<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#fafafa;">${escape(text)}</div>`;
+}
+
+function wrapDocument(sprache: Sprache, preheader: string, inner: string): string {
   return `<!doctype html>
 <html lang="${sprache}">
   <head>
@@ -155,37 +278,61 @@ function wrapDocument(sprache: string, innerBody: string): string {
     <title>Bauservice</title>
   </head>
   <body style="margin:0;padding:0;background:#fafafa;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a;">
-    ${innerBody}
+    ${preheader}
+    ${inner}
   </body>
 </html>`;
 }
 
 function buildHtml(
   payload: RenderPayload["payload"],
-  sprache: "de" | "it",
+  sprache: Sprache,
   scenarioId: ScenarioId
-): string {
+): { html: string; subject: string } {
+  const pack = getContent(sprache);
+  const scenario = pack.scenarios[scenarioId];
+  const subject = resolveSubject(
+    scenario,
+    payload.pinnedExample,
+    sprache,
+    payload.overrides?.subject
+  );
+
   if (payload.overrides?.bodyHtml) {
-    return wrapDocument(sprache, payload.overrides.bodyHtml);
+    const html = wrapDocument(
+      sprache,
+      buildPreheader(scenario.preview),
+      payload.overrides.bodyHtml
+    );
+    return { html, subject };
   }
 
-  const copy = scenarioCopy[scenarioId][sprache];
-  const salutation = buildSalutation(payload, sprache, scenarioId);
-  const hook = escape(payload.overrides?.hook || copy.hook);
-  const bridge = escape(payload.overrides?.bridge || copy.bridge);
-  const cta = escape(payload.overrides?.cta || copy.cta);
-  const labels = sprache === "it" ? serviceLabelIt : serviceLabelDe;
+  const salutation = buildSalutation(payload, sprache, scenario);
+  const hook = escape(payload.overrides?.hook || scenario.hook);
+  const bridge = escape(payload.overrides?.bridge || scenario.bridge);
+  const ctaOpening = escape(scenario.ctaOpening);
+  const ctaClosing = escape(payload.overrides?.cta || scenario.ctaClosing);
+  const senderName =
+    payload.overrides?.senderName?.trim() || pack.signature.senderName;
 
-  const exampleSections = servicesOrder
-    .filter((s) => payload.serviceEnabled[s])
-    .map((s) => buildSection(labels[s], payload.examples[s] ?? [], sprache))
-    .join("");
-
-  const valueProps = buildValuePropsList(copy.valueProps);
-  const optOutDe =
-    "Wir informieren Sie, dass Ihre Emailadresse aus öffentlich zugänglichen Archiven stammt. Betreff REMOVE an info@bauservice.it streicht Sie aus unseren Archiven.";
-  const optOutIt =
-    "La informiamo che la sua e-mail è stata trovata su internet. Inviando una e-mail a info@bauservice.it con oggetto REMOVE verrà rimossa dai nostri archivi.";
+  const activeServices: Service[] = servicesOrder.filter(
+    (s) => payload.serviceEnabled[s]
+  );
+  const anyExamples = activeServices.some(
+    (s) => (payload.examples[s] ?? []).length > 0
+  );
+  const sections = anyExamples
+    ? activeServices
+        .map((s) =>
+          buildSection(
+            pack.serviceLabels[s],
+            payload.examples[s] ?? [],
+            sprache,
+            pack
+          )
+        )
+        .join("")
+    : "";
 
   const inner = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fafafa;padding:32px 16px;">
       <tr>
@@ -206,24 +353,27 @@ function buildHtml(
                     <td style="font-size:14px;line-height:1.55;color:#334155;">${hook}</td>
                   </tr>
                   <tr>
+                    <td style="padding-top:16px;font-size:14px;line-height:1.55;color:#0f172a;font-weight:500;">${ctaOpening}</td>
+                  </tr>
+                  <tr>
                     <td style="padding-top:16px;font-size:14px;line-height:1.55;color:#334155;">${bridge}</td>
                   </tr>
-                  ${exampleSections}
-                  ${valueProps}
+                  ${sections}
+                  ${buildValueProps(pack.valueProps)}
                   <tr>
-                    <td style="padding-top:22px;font-size:13px;line-height:1.55;color:#475569;font-style:italic;">${escape(copy.urgency)}</td>
+                    <td style="padding-top:22px;font-size:13px;line-height:1.55;color:#475569;font-style:italic;">${escape(pack.urgency)}</td>
                   </tr>
                   <tr>
-                    <td style="padding-top:20px;font-size:14px;line-height:1.55;color:#0f172a;font-weight:500;">${cta}</td>
+                    <td style="padding-top:20px;font-size:14px;line-height:1.55;color:#0f172a;font-weight:500;">${ctaClosing}</td>
                   </tr>
                   <tr>
                     <td style="padding-top:24px;border-top:1px solid #e4e4e7;padding-bottom:6px;">&nbsp;</td>
                   </tr>
                   <tr>
-                    <td style="padding-top:4px;font-size:11px;color:#71717a;">${escape(copy.footer)}</td>
+                    <td style="padding-top:4px;">${buildSignature(pack.signature, senderName)}</td>
                   </tr>
                   <tr>
-                    <td style="padding-top:12px;font-size:10px;line-height:1.5;color:#a1a1aa;">${escape(sprache === "it" ? optOutIt : optOutDe)}</td>
+                    <td style="padding-top:14px;font-size:10px;line-height:1.5;color:#a1a1aa;">${escape(pack.optOutDisclaimer)}</td>
                   </tr>
                 </table>
               </td>
@@ -232,16 +382,25 @@ function buildHtml(
         </td>
       </tr>
     </table>`;
-  return wrapDocument(sprache, inner);
-}
 
-type RenderResult = { html: string; text: string };
+  return {
+    html: wrapDocument(sprache, buildPreheader(scenario.preview), inner),
+    subject,
+  };
+}
 
 const cache = new Map<string, RenderResult>();
 const MAX_CACHE = 200;
 
 function cacheKey(payload: RenderPayload): string {
-  return `${TEMPLATE_VERSION}|${payload.sprache}|${payload.scenarioId ?? "D"}|${JSON.stringify(payload.payload)}`;
+  // Shrink pinnedExample to an identity pair — the same Example object repeats
+  // across every recipient in an item-origin campaign, so serializing the full
+  // shape per key would explode the key strings without adding any distinction.
+  const { pinnedExample, ...rest } = payload.payload;
+  const pinnedKey = pinnedExample
+    ? { id: pinnedExample.id, service: pinnedExample.service }
+    : null;
+  return `${TEMPLATE_VERSION}|${payload.sprache}|${payload.scenarioId ?? DEFAULT_SCENARIO_ID}|${JSON.stringify({ ...rest, pinnedKey })}`;
 }
 
 export function render(payload: RenderPayload): RenderResult {
@@ -249,8 +408,8 @@ export function render(payload: RenderPayload): RenderResult {
   const hit = cache.get(key);
   if (hit) return hit;
 
-  const scenarioId: ScenarioId = payload.scenarioId ?? "D";
-  const html = buildHtml(payload.payload, payload.sprache, scenarioId);
+  const scenarioId: ScenarioId = payload.scenarioId ?? DEFAULT_SCENARIO_ID;
+  const { html, subject } = buildHtml(payload.payload, payload.sprache, scenarioId);
 
   const text = htmlToText(html, {
     wordwrap: 78,
@@ -260,7 +419,7 @@ export function render(payload: RenderPayload): RenderResult {
     ],
   });
 
-  const result: RenderResult = { html, text };
+  const result: RenderResult = { html, text, subject };
   if (cache.size >= MAX_CACHE) {
     const firstKey = cache.keys().next().value;
     if (firstKey !== undefined) cache.delete(firstKey);
