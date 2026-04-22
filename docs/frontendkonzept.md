@@ -1,16 +1,16 @@
 # Frontendkonzept — Bauservice Email-Automation
 
-**Session 1 · 2026-04-20 · Status: Entwurf, Rev 3 inkl. Phase-1.5-Erweiterung**
+**Session 2 · 2026-04-22 · Status: Rev 4 — Phase 1.6 bis 1.9 umgesetzt**
 
-Dieses Dokument beschreibt das Zielbild des Next.js-Frontends für die AI-Powered Email-Automation von Bauservice. Es klärt Seitenstruktur, Komponenten-Inventar, State-Management, Integrationspunkte und offene Fragen, damit die Implementierung auf einer geteilten Grundlage starten kann. Implementiert wird später — heute nur Konzept.
+Dieses Dokument beschreibt das Zielbild des Next.js-Frontends für die AI-Powered Email-Automation von Bauservice. Die ursprünglichen Kapitel (§ 1 Zielbild bis § 9 Dummy-Endpoints) sind mit Rev 3 (2026-04-20) als Implementierungsgrundlage entstanden. Rev 4 (2026-04-22) reflektiert den tatsächlichen Code-Stand nach den Phasen 1.7 (Customer-Type-Szenarien), 1.8 (Template-Polish auf Goldstandard) und 1.9 (Stepper + Swap-Sheet-Detail + Drizzle-Scaffolding) — alle auf `main` gemerged.
 
-Alle externen Systeme werden in dieser Phase gegen **Dummy-Endpoints** angesprochen; der Swap auf echte Backends (Weaviate, SQL-Views, Mailjet) erfolgt in Phase 2.
+Alle externen Systeme werden in Phase 1 gegen **Dummy-Endpoints** angesprochen; der Swap auf echte Backends erfolgt in Phase 2. Der Kontrakt für diesen Swap ist ausgelagert in [`docs/backend-endpoints-kontrakt.md`](backend-endpoints-kontrakt.md) und [`docs/sql-views-ddl-vorschlag.md`](sql-views-ddl-vorschlag.md).
 
 **Zuständigkeiten im Team:**
-- **Julian** — Frontend (Next.js-App, Komponenten, Review-Flow) und Email-Templates (MJML, Rendering, Plain-Text-Fallback).
-- **Matthias** — Matching-Logik, Bestands-DB (Views, Opt-out-Filter), Weaviate-Vektorisierung, Reindex-Pipeline.
+- **Julian** — Frontend (Next.js-App, Komponenten, Review-Flow), Email-Template-Content, Mailjet-Integration (Post-MVP).
+- **Matthias** — Matching-Logik, Bestands-DB (Views, Opt-out-Filter), Weaviate-Vektorisierung, Reindex-Pipeline, Feedback-Persistenz.
 
-Die Integrationsgrenze läuft über die Dummy-Endpoints in § 5. Julian liefert die Request-Shapes, Matthias liefert die Responses.
+Die Integrationsgrenze läuft über die Endpoints in [`docs/backend-endpoints-kontrakt.md`](backend-endpoints-kontrakt.md). Frontend-Drizzle-Schemas in [`src/lib/db/schema.ts`](../src/lib/db/schema.ts).
 
 ---
 
@@ -38,6 +38,32 @@ Bauservice ist ein kleiner Kunde (3.900 EUR einmalig + 65 EUR/Monat, 6 Wochen, 1
 - **Matching-Score + Begründungstext** ("Passend zu Gewerk X und Bezirk Y") in Swap-Sheet und Review-Cards, Score als farbiger Progress-Bar.
 - **Feedback-Loop**: „Passt" / „Passt nicht" pro Example mit `POST /api/dummy/feedback` (in-memory Logger, wird in Phase 2 für ML-Training persistiert).
 - **`/analytics`** als Placeholder — echtes Tracking folgt in Phase 2.
+
+**Phase-1.7-Erweiterungen (Customer-Type, implementiert):**
+- **Vier Kundentyp-Szenarien A/B/C/D** (Bestandskunde, Zuschlag-Gewinner, Teilnehmer-verloren, Kaltakquise) pro Empfänger, steuern Hook/Bridge/CTA/Subject.
+- **`classifyRecipient()`-Logik** in [`src/lib/scenarios.ts`](../src/lib/scenarios.ts) und [`src/lib/fixtures/matching.ts`](../src/lib/fixtures/matching.ts) — beim Draft-Build wird automatisch auf Basis von `isGewinner`/`isTeilnehmer`/`isKunde` klassifiziert. Der neue Dummy-Endpoint [`POST /api/dummy/classify-recipient`](../src/app/api/dummy/classify-recipient/route.ts) liefert das Szenario pro Empfänger.
+- **`ScenarioSelector`**-Komponente im Review-Screen lässt den User die automatische Klassifikation manuell überschreiben.
+- **Ergebnisse-Service getrennt** von Ausschreibungen (eigene Tabelle, eigenes Meta-Schema).
+- **Service-Detail-Drawer** für die `/services`-Tabelle (Klick auf Zeile öffnet Detail-Ansicht vor Kampagnen-Start).
+
+**Phase-1.8-Erweiterungen (Template-Polish auf Goldstandard, implementiert — PR #3 gemerged):**
+- **Content-Packs** in [`src/lib/email-template-content/{de,it}.ts`](../src/lib/email-template-content/) — alle DE/IT-Strings extern, Muttersprachler kann IT-Wording per PR optimieren. Schließt Pre-Header, Subject (mit `{itemTitle}`-Placeholder), Salutation-Prefixes, Hook, Bridge, doppelte CTA, Value-Props (6 Punkte), Urgency-Hook, Signatur und Opt-out-Disclaimer ein.
+- **Subject aus Render-Response** — Preview-Header liest `rendered.subject` statt hardcoded Template-String.
+- **Service-spezifisches Meta** pro Example-Typ: Ergebnisse mit „Zuschlag an [Firma] (€X · Y%)" + „Bekanntmachung"-Zeile; Beschlüsse mit Beschluss-Nr + Status + Geschätzter Betrag; Konzessionen mit Gemeinde/Typ/Bauherr.
+- **Plain-Text-Look** im Template (statt Card-Borders): `<hr>`-Separatoren zwischen Examples, schlichte Meta-Zeilen, kein blauer Left-Border.
+- **140-Zeichen-Cut** für lange Beschreibungen mit `…`-Trunkierung.
+- **Doppelte CTA**: nach Hook mit Telefon 0472 208308, abschließend vor Signatur — pro Scenario definiert.
+- **Ansprechpartner-Anrede Stufe 1**: Recipient hat ein `ansprechpartner?`-Feld (Vorname, Nachname, Geschlecht, Titel). Template rendert „Sehr geehrter Herr Ing. Perini" bzw. „Egregio Sig. Ing. Perini" — Prefixes in Content-Packs, Fallback auf Firmen-Anrede. Datenquelle: `VectorDB_Kontakte.{Vorname, Nachname, Geschlecht, Anrede_i}` — in Phase 1 per Fixture-Parse-Heuristik, in Phase 2 direkt aus der SQL-View.
+- **Adresse**: Julius-Durst-Str. 70 – HOUSE70, 39042 Brixen (Goldstandard-Adresse „Am Thalhofer Graben" war veraltet). Sender-Name Default „Meinrad Kerschbaumer", pro Kampagne überschreibbar via `EmailOverrides.senderName`.
+- **Bilingualer Opt-out-Disclaimer** mit Verweis auf `D.L. N° 196/2003` und REMOVE-Mechanik.
+- **Anzahl Beispiele pro Service einstellbar** — inline Number-Input (1–10) im Service-Panel-Header, überschreibt den globalen Default pro Kampagne. Matching-Pool holt seit 1.8 `n=10` Items pro Service und Empfänger für Slider-Headroom.
+- **Feedback-Persistenz im Store** — `FeedbackMap` im `campaign-store` hält die „Passt"/„Passt nicht"-Signale pro Empfänger × Service × Example. „Ungeeignet"-Badge + Strike-Through auf der Example-Card bleiben beim Tab-Wechsel erhalten.
+
+**Phase-1.9-Erweiterungen (UX-Finish + DB-Connector-Vorbereitung, implementiert — PR #4 gemerged):**
+- **`CampaignStepper`-Komponente** (Auswahl → Review → Versand, `aria-disabled` auf Future-Steps) auf 4 Flow-Seiten: `/kampagnen/neu-aus-kontakt`, `/kampagnen/neu-aus-item`, `/kampagnen/[id]`, `/kampagnen/[id]/versand`.
+- **ExampleSwapSheet** mit List/Detail-Mode-Toggle im Header. Detail-Mode zeigt einen Vorschlag nach dem anderen mit Prev/Next-Navigation (`1 / 9`-Counter) und „Diesen übernehmen"-CTA analog Kundenportal-Detail-View.
+- **X-Icon top-right** auf nicht-pinned Example-Cards (ersetzt den Hover-versteckten „Entfernen"-Text-Button).
+- **Drizzle + mysql2 scaffolding**: [`src/lib/db/schema.ts`](../src/lib/db/schema.ts) mit den 5 `v_frontend_*`-Views + 3 Persistenz-Tabellen (`campaigns`, `campaign_recipients`, `ml_feedback`), [`src/lib/db/client.ts`](../src/lib/db/client.ts) mit lazy initialisiertem Pool. `.env.example` konsolidiert, `drizzle.config.ts` für Introspect-Runs.
 
 **Explizit NICHT in Phase 1 (Phase 2 oder später):**
 - Settings-Bereich im Frontend (Templates, Service-Defaults, Nutzerverwaltung) — Templates und Defaults liegen als Files/Konstanten im Repo und werden per PR geändert.
@@ -146,12 +172,16 @@ app/
 |---|---|---|
 | `RecipientPicker` | Multi-Select aus `VectorDB_Kontakte`, Live-Suche, Gewerk-/Region-/Rollen-Filter, Segment-Toggle Neu/Bestand/Alle, Opt-out hart ausgeblendet | A + Review |
 | `ItemPicker` | Auswahl eines Items aus einer der 4 Service-Listen, Service-Umschalter als Tabs | B |
-| `ServicePanel` | Container für einen Service-Block (Titel, Anzahl, Inkludieren-Toggle) | Review |
-| `ExampleCard` | Einzelnes Beispiel mit Metadaten (Betrag, Bezirk, Gewerk, Datum), Score-Bar, Begründung, "Passt/Passt nicht"-Feedback-Buttons sowie Austauschen/Entfernen | Review |
-| `ExampleSwapSheet` | Side-Sheet mit alternativen Beispielen, jeweils mit Score-Bar und Begründungstext | Review |
-| `EmailPreview` | Mail-Client-Header (Von/An/Betreff) oben, dann iframe mit gerendertem HTML + Plain-Text-Toggle | Review |
-| `EditableTextBlock` | Inline-editierbarer Textbereich für Anrede/Einleitung/CTA-Overrides | Review |
-| `ApprovalBar` | Sticky-Footer mit "Verwerfen" und "Versenden" | Review / Versand |
+| `CampaignStepper` | Fortschritts-Anzeige „Auswahl → Review → Versand" mit klickbarer Rückwärts-Navigation und `aria-disabled` auf Future-Steps | alle 4 Flow-Seiten |
+| `ServicePanel` | Container für einen Service-Block (Titel, inline Number-Input 1–10 für Anzahl, Inkludieren-Toggle) | Review |
+| `ScenarioSelector` | Vier Kacheln (A/B/C/D) pro Empfänger. System klassifiziert automatisch via `classifyRecipient()`, User kann überschreiben | Review |
+| `ExampleCard` | Einzelnes Beispiel mit Service-spezifischem Meta, Score-Bar, Begründung, „Passt/Passt nicht"-Feedback (persistent via Store), Austauschen-Button und immer sichtbarem X-Icon top-right | Review |
+| `ExampleSwapSheet` | Side-Sheet mit List-/Detail-Mode-Toggle. Detail-Mode zeigt einen Vorschlag mit Prev/Next-Navigation und „Diesen übernehmen"-CTA | Review |
+| `EmailPreview` | Mail-Client-Header (Von/An/Betreff) oben, Subject aus Render-Response, Inline-WYSIWYG-Bearbeiten-Modus oder iframe mit gerendertem HTML + Plain-Text-Toggle | Review |
+| `EditableTextBlock` | Strukturierter Text-Editor für Anrede/Hook/Bridge/CTA-Overrides pro Empfänger | Review |
+| `ApprovalBar` | Sticky-Footer mit „Verwerfen" und „Weiter zum Versand" | Review / Versand |
+| `RecipientSwapSheet` | Side-Sheet zum Nachträglichen Hinzufügen weiterer Empfänger in laufende Kampagne | Review |
+| `SuggestedCampaigns` | Dashboard-Widget mit Top-N Empfänger × Item-Kombinationen aus `/api/dummy/sql/suggestions` | Dashboard |
 
 **Aus Phase 1 herausgenommen:** `RecipientUploadDialog` (kein CSV/XLSX), `CampaignTimeline` (zwei Status reichen).
 
@@ -174,8 +204,11 @@ app/
 | Email-Draft | Server-Action rendert MJML | Bei Beispieländerung oder Text-Override neu rendern |
 | Versand-Status | Mailjet-Response beim Send-Call | Synchrones Ergebnis, kein Polling in Phase 1 |
 
-**Client-Store (Zustand) hält nur:**
-- aktuelle Kampagnen-ID, Flow-Richtung (A/B), ausgewählte Beispiele pro Service, Toggle-Zustände, Text-Overrides, Empfänger-Skip-Liste, Dirty-Flag.
+**Client-Store (Zustand, implementiert in [`src/lib/campaign-store.ts`](../src/lib/campaign-store.ts)) hält:**
+- `campaign`, `drafts` (pro Empfänger mit Sprache, `scenarioId`, Service-Enabled-Flags, `selectedExamples`, Overrides inkl. `subject`/`senderName`/`bodyHtml`), `examplesByService`-Pool (sortiert nach Score aus Matching).
+- `renderCache` pro Empfänger: `{ html, text, subject }` — bedient den Preview-iframe und den Subject-Header.
+- `feedback`-Map: `recipientId → service → exampleId → "passt" | "passt_nicht"` — persistiert die Badge-Zustände beim Tab-Wechsel.
+- `activeRecipientId`, `isDirty`, `loading` als UI-Status.
 
 ---
 
@@ -195,10 +228,16 @@ Alle Calls laufen in Phase 1 über stubbed API-Routen unter `app/api/dummy/*`. D
 | `POST /api/dummy/mailjet/send` | Frontend → Mailjet | `/kampagnen/[id]/versand` | `{ campaignId }` → `{ jobId, accepted, rejected? }` |
 
 **Wichtig für den Kontrakt mit Matthias (Matching/DB):**
-- Beide `matching/*`-Endpoints liefern einen **Relevanz-Score** (0–1) und ein **`reason`-Feld** (menschenlesbare Begründung, z. B. "Passend zu Gewerk Tiefbau und Bezirk Eisacktal") pro Treffer mit. Der Score steuert Sortierung und UI-Progress-Bar, der Reason wird in `ExampleCard` + `ExampleSwapSheet` angezeigt.
-- Der **Opt-out- und Aktiv-Filter** wird serverseitig in den SQL- und Matching-Routen durchgesetzt, nicht erst im Frontend — das ist auch für das Versand-Audit relevant.
-- Die **Sprachauswahl** (`Kontakte.Sprache` = `'de'` | `'it'`) wird vom Frontend an `render/mjml` mitgegeben; welche `_D`/`_I`-Spalten geliefert werden, entscheidet die Matching-API basierend auf der Empfängersprache.
-- `POST /api/dummy/feedback` nimmt „Passt"/„Passt nicht"-Signale pro `{recipientId, service, exampleId}` entgegen. Phase 2 persistiert das in Matthias' ML-Trainings-Store.
+
+Die vollständige HTTP-API-Spezifikation (inkl. Request-/Response-Shapes, SQL-View-DDL-Vorschläge, Persistenz-Tabellen und Implementierungs-Reihenfolge) liegt in [`docs/backend-endpoints-kontrakt.md`](backend-endpoints-kontrakt.md) und [`docs/sql-views-ddl-vorschlag.md`](sql-views-ddl-vorschlag.md). Rev-4-Zusammenfassung der wichtigsten Punkte:
+
+- **Score + `reason`-Feld** pro Treffer an beiden Matching-Endpoints (0–1). Score steuert UI-Progress-Bar (grün ≥0.8, amber ≥0.6), Reason wird in `ExampleCard` + `ExampleSwapSheet` angezeigt.
+- **`isGewinner` / `isTeilnehmer` / `isKunde`-Booleans** pro Empfänger in `POST /matching/recipients` — ersetzt das ursprünglich diskutierte `trigger`-Envelope. Das Frontend ruft `classifyRecipient()` client-seitig und setzt das Kundentyp-Szenario (A/B/C/D).
+- **Ansprechpartner-Felder** (Vorname, Nachname, Geschlecht, Titel) direkt aus `VectorDB_Kontakte` in der Recipients-View — kein Schema-Eingriff nötig, Felder existieren bereits mit 75 % / 75 % / 75 % / 38 % Füllquote.
+- **Opt-out- und Aktiv-Filter** werden serverseitig in der View (`WHERE Aktiv=1 AND Keine_Werbung_senden=0`) durchgesetzt, nicht erst im Frontend — auch für Versand-Audit relevant. Send-Stub prüft zusätzlich zum Zeitpunkt des Sendens.
+- **Sprache pro Empfänger** (`Kontakte.Sprache` = `"de"` | `"it"`) wird vom Frontend an den Render-Endpoint mitgegeben. Ein Template mit zwei Sprachvarianten, kein zweisprachiger Inhalt pro Mail.
+- **Render-Response** liefert seit Phase 1.8 `{ html, text, subject }` — das Subject löst `{itemTitle}`-Placeholder aus `pinnedExample` auf und wird vom Preview-Header konsumiert.
+- **`POST /feedback`** nimmt „Passt"/„Passt nicht"-Signale pro `{recipientId, service, exampleId}` entgegen. Phase 2 persistiert in `ml_feedback` (Append-only). Matthias nutzt das Signal für Score-Ranking.
 
 **Reale Tabellenstruktur (Snapshot 2026-04-20):**
 
@@ -217,100 +256,14 @@ Die Bauservice-DB ist MySQL. Alle relevanten Tabellen tragen das Präfix `Vector
 | `VectorDB_Projektierungen_Unterkategorie` | Zuordnung Projekt ↔ Kategorie | — |
 | `VectorDB_Konzessionen_Unterkategorie` | Zuordnung Konzession ↔ Kategorie | — |
 
-**Datenmodell-Skizze (TypeScript, angelehnt an reale Spalten):**
+**Datenmodell — kanonische Quellen (Rev 4):**
 
-```ts
-type Service = 'ausschreibungen' | 'ergebnisse' | 'beschluesse' | 'baukonzessionen';
-type Sprache = 'de' | 'it';
+Die ursprüngliche TS-Skizze von Rev 2 ist durch den echten Code abgelöst. Einstiegspunkte:
 
-type Recipient = {
-  id: number;                         // VectorDB_Kontakte.id
-  nameDe: string;                     // Kontakt_full_name_D
-  nameIt: string;                     // Kontakt_full_name_I
-  sprache: Sprache;                   // Sprache
-  email: string;                      // EMailAdresse
-  pec?: string;                       // PEC
-  bezirkDe?: string;                  // inBezirk_d
-  provinz?: string;                   // inProvinz_i
-  rollen: {
-    ausschreiber: boolean;            // Auftraggeber / Vergabestelle
-    anbieter: boolean;                // Firma, die Ausschreibungen bedient
-    kunde: boolean;                   // Bauservice-Kunde
-  };
-  aktiv: boolean;                     // Aktiv
-  optOut: boolean;                    // "Keine Werbung senden"
-};
-
-type ExampleBase = {
-  id: number;
-  service: Service;
-  datum?: string;                     // ISO
-  bezirk?: string;
-  beschreibungDe: string;
-  beschreibungIt: string;
-  quelle: { table: string; pk: string };
-};
-
-type AusschreibungExample = ExampleBase & {
-  service: 'ausschreibungen';
-  ausschreiberId?: number;
-  betrag?: number;
-  cig?: string;
-  cup?: string;
-  gewinnerId?: number;                // erst nach Zuschlag gesetzt
-};
-
-type ErgebnisExample = ExampleBase & {
-  service: 'ergebnisse';
-  ausschreibungId: number;
-  teilnehmerId: number;
-  betrag?: number;
-  punkteBewertung?: number;
-  prozent?: number;
-};
-
-type BeschlussExample = ExampleBase & {
-  service: 'beschluesse';
-  beschlussNr?: string;
-  beschlussDatum?: string;
-  betrag?: number;
-  geschaetzterBetrag?: number;
-  status?: string;
-};
-
-type KonzessionExample = ExampleBase & {
-  service: 'baukonzessionen';
-  gemeinde?: string;
-  konzessionenTyp?: string;
-  name?: string;
-  adresse?: string;
-  ort?: string;
-};
-
-type Example =
-  | AusschreibungExample
-  | ErgebnisExample
-  | BeschlussExample
-  | KonzessionExample;
-
-type CampaignDraft = {
-  id: string;
-  name: string;
-  status: 'draft' | 'sent';            // Phase 1 nur zwei Status
-  origin: 'recipient' | 'item';        // Einstiegsrichtung A vs. B
-  itemRef?: { service: Service; itemId: number };   // nur bei origin='item' gesetzt
-  createdAt: string;
-  createdBy: string;
-  items: Array<{
-    recipientId: number;
-    sprache: Sprache;                  // aus Kontakte.Sprache, bestimmt Render-Sprache
-    selectedExamples: Record<Service, number[]>;
-    serviceEnabled: Record<Service, boolean>;
-    overrides?: { salutation?: string; intro?: string; cta?: string };
-    skip?: boolean;                    // Empfänger aus Versandliste gestrichen
-  }>;
-};
-```
+- [`src/lib/types.ts`](../src/lib/types.ts) — `Recipient` (inkl. `ansprechpartner?`), `Example`-Varianten, `Campaign`, `EmailOverrides`, `RenderPayload`, `RenderResult`, `DEFAULT_SCENARIO_ID`.
+- [`src/lib/email-template-content/types.ts`](../src/lib/email-template-content/types.ts) — `ContentPack`, `ScenarioContent`, `Signature`, `MetaLabels`, `PersonSalutation`.
+- [`src/lib/db/schema.ts`](../src/lib/db/schema.ts) — Drizzle-Schemas für die 5 `v_frontend_*`-Views + `campaigns`, `campaign_recipients`, `ml_feedback`. Matthias-Lesung.
+- [`docs/backend-endpoints-kontrakt.md`](backend-endpoints-kontrakt.md) § 2 — vollständige TS-Shapes mit FK-Referenzen, Füllquoten und Pflicht-vs.-Optional-Markierung.
 
 **Abgeleitete UI-Regeln aus dem Schema:**
 
@@ -356,43 +309,51 @@ type CampaignDraft = {
 
 ---
 
-## 8. Offene Fragen an Bauservice
+## 8. Offene Fragen
 
-Durch den Schema-Snapshot vom 20.04.2026 und das Scope-Alignment (Rev 2) sind einige Ausgangsfragen bereits beantwortet:
+Durch Schema-Snapshot, Scope-Alignments, Phase-1.8/1.9-Umsetzung und die Memo-vs-Ist-Analyse sind viele ursprüngliche Fragen beantwortet:
 
-- **DBMS:** MySQL, bestätigt.
-- **Empfängerdaten:** interne Tabelle `VectorDB_Kontakte`, kein separates CRM nötig. **CSV-Upload ist aus Phase 1 gestrichen.**
-- **Mehrsprachigkeit:** eine Mail pro Empfänger in dessen Sprache (`Kontakte.Sprache`), ein MJML-Template mit DE/IT-Varianten.
-- **Opt-out-Handling:** Flag `Keine Werbung senden` in `VectorDB_Kontakte` — muss serverseitig in SQL-View und Matching-API hart gefiltert werden und im Send-Call erneut geprüft werden.
-- **Flow-Richtung:** beide Richtungen gleichberechtigt, bidirektionaler Einstieg (vgl. § 1).
-- **Review-Tiefe:** Individual-Editing pro Empfänger (vgl. § 1 und § 3).
-- **Settings-UI:** nicht in Phase 1; Templates und Defaults werden im Repo gepflegt.
-- **Rollen:** keine Trennung in Phase 1.
+**Geklärt (Rev 1–4):**
+- DBMS MySQL · CSV-Upload gestrichen · Sprache pro Empfänger aus `Kontakte.Sprache` · Opt-out-Hartfilter serverseitig in View + Send-Re-Check · bidirektionaler Einstieg · Individual-Editing im Review · Settings-UI erst Phase 2 · keine Rollentrennung in Phase 1.
+- **E.1 Ansprechpartner-Feld**: aufgelöst. `VectorDB_Kontakte` hat bereits `Vorname`, `Nachname`, `Geschlecht`, `Anrede_i` (75 / 75 / 75 / 38 % Füllquote, siehe `docs/db-exploration.md`). Kein Schema-Eingriff nötig, nur SQL-View-Erweiterung.
+- **E.2 Trigger-Shape**: aufgelöst. Kein `trigger`-Envelope — stattdessen `isGewinner` / `isTeilnehmer` / `isKunde` pro Empfänger in `POST /matching/recipients`.
+- **Gewerks-Taxonomie**: über `VectorDB_Oberkategorie_Unterkategorie`, Mapping auf kanonische Gewerke in `src/lib/filter-options.ts`. DDL-Vorschlag in [`docs/sql-views-ddl-vorschlag.md`](sql-views-ddl-vorschlag.md) § 1.
+- **Plain-Text-Fallback**: wird gerendert via `html-to-text`, Deliverability-Best-Practice.
+- **Unsubscribe-Mechanik**: textbasierter REMOVE-Opt-out im Footer (kein Klick-Link), Mailjet List-Unsubscribe-Header separat (Post-MVP-Task).
 
-Diese Punkte bleiben offen und müssen im Kickoff / Discovery geklärt werden:
+**Noch offen — Kickoff mit Bauservice:**
 
-1. **View-Strategie.** Die `VectorDB_*`-Tabellen sind offenbar Aufbereitungs-Tabellen — werden sie periodisch befüllt (Batch-Job bei Bauservice) oder sind es Views auf Live-Daten? Wie oft aktualisieren? Sync-Intervall für Weaviate-Reindex abhängig davon. **(Matthias)**
-2. **Gewerks-Taxonomie.** Die Tabelle `VectorDB_Oberkategorie_Unterkategorie` strukturiert Gewerke. Gibt es Dokumentation / Anzahl der Kategorien? Für das Matching und die Filter-UI relevant. **(Matthias/Bauservice)**
-3. **Matching-Scoring.** Welche Score-Skala liefert die Matching-API (0–1, Prozent, bucketiert)? Soll der Score im Review-Screen sichtbar sein oder nur die Reihenfolge steuern? **(Matthias/Julian gemeinsam)**
-4. **Absender-Identität & DKIM.** Welche Absenderadresse(n)? Ist Mailjet-DKIM-Setup für `bauservice.it` bereits vorhanden? **(Bauservice)**
-5. **Plain-Text-Fallback.** Muss ein Plain-Text-Part verpflichtend mitgehen (Deliverability-Best-Practice)? Vermutlich ja. **(Julian klärt mit Mailjet-Doku)**
-6. **Unsubscribe-Link.** Jede Werbemail braucht einen funktionierenden Opt-out-Link (CAN-SPAM / DSGVO). Mechanik: Token-Link, der `Keine Werbung senden = 1` setzt. Wer baut den Endpoint? **(Julian FE-Link, Matthias DB-Write)**
-7. **Auth-Verfahren.** Magic-Link via Resend/SMTP als Default. Alternative: Basic-Auth für MVP. IdP-Existenz bei Bauservice prüfen. **(Kickoff)**
-8. **Matching-Kriterien.** Gewerk/Region sind über das Schema klar. Gibt es weitere (historische Aufträge aus `Ausschreibungen_Teilnehmer`, Umsatzklasse, Netzwerk-Zugehörigkeit)? **(Bauservice)**
-9. **Versand-Audit.** Welche Daten müssen aus Compliance-Gründen pro Versand festgehalten werden (Zeitpunkt, gewählte Beispiele, Mitarbeiter-ID, Opt-out-Status zum Versandzeitpunkt)? **(Bauservice)**
-10. **DB-Zugang für Produktion.** MySQL-Port ist von außen blockiert; phpMyAdmin-Scraping ist nur Interims-Lösung. Benötigt: VPN, SSH-Tunnel oder Firewall-Freischaltung plus dediziertes Read-only-Konto. Der bisherige Demo-Zugang lief über Plain-HTTP und ist zu ersetzen bzw. zu rotieren (Klartext-Credentials bleiben lokal, nicht im Repo). **(Bauservice/Matthias)**
+1. **Auth-Verfahren.** Magic-Link via Resend/SMTP als Default, Alternative Basic-Auth-Middleware für MVP. IdP-Existenz prüfen.
+2. **Matching-Kriterien jenseits Gewerk/Region.** Historische Aufträge aus `Ausschreibungen_Teilnehmer`, Umsatzklasse, Netzwerk-Zugehörigkeit?
+3. **Versand-Audit.** Welche Daten müssen pro Versand geloggt werden (Zeitpunkt, gewählte Beispiele, Mitarbeiter-ID, Opt-out-Status zum Versandzeitpunkt)?
+4. **Produktiver DB-Zugang.** VPN/SSH-Tunnel + dediziertes Read-only-Konto. Plain-HTTP-phpMyAdmin ist Interims-Lösung.
+5. **IT-Wording-Sign-off (D.2).** Wer bei Bauservice überprüft die italienischen Content-Pack-Texte? Meinrad oder ein anderer Muttersprachler?
+
+**Noch offen — Matthias:**
+
+6. **View-Refresh-Strategie.** `VectorDB_*` batch-befüllt oder Live-Views? Aktualisierungsfrequenz? Bestimmt Weaviate-Reindex-Kadenz.
+7. **Score-Skala.** 0–1 kontinuierlich oder bucketiert (High/Med/Low)? Frontend unterstützt beides.
+8. **Feedback-Persistenz-Granularität.** Reicht das Append-only-Schema aus `docs/sql-views-ddl-vorschlag.md` § 6 für Matthias' ML-Training?
+
+**Noch offen — Post-MVP (Parent-Task 86c802jrx):**
+
+9. **Mailjet-Integration + DKIM + SPF + DMARC** für `bauservice.it` → blockt Cross-Client-Test D.1.
+10. **AI-Summary DB-seitig (E.3).** Optional-Phase-2: Beschreibungs-Kürzung als KI-Zusammenfassung in der SQL-View, statt harter 140-Zeichen-Cut im Template.
+11. **Website-Scraping-Profiling.** Memo-Deviation: „anhand vorhandener Ergebnisse aus der Datenbank **und anhand der Firmenwebsite**" — DB-Teil ist drin (`classifyRecipient`), Website-Teil fehlt. Memo sagt „wenn möglich" → nicht MVP-blocking.
 
 ---
 
-## 9. Dummy-Endpoints — Hinweis zur Phase 2
+## 9. Dummy-Endpoints — Phase-2-Swap
 
-Alle Routen unter `app/api/dummy/*` liefern in Phase 1 statische bzw. pseudorandomisierte Responses mit den im Datenmodell (§ 5) beschriebenen Shapes. Das erlaubt, das Frontend komplett zu bauen und zu demonstrieren, ohne dass Weaviate, die Kundendaten-DB oder Mailjet produktiv angeschlossen sind.
+Alle Routen unter `app/api/dummy/*` liefern in Phase 1 pseudorandomisierte Responses auf Basis der Fixtures. Die Response-Shapes sind die Phase-2-Vertragsgrundlage für Matthias — siehe Kontrakt-Doc für Details.
 
-**Swap in Phase 2:**
-- `dummy/matching/examples` + `dummy/matching/recipients` → Weaviate-Client mit semantischem Match (Matthias)
-- `dummy/sql/*` → Prisma/Drizzle gegen Bestands-Views (Matthias)
-- `dummy/render/mjml` → `mjml`-npm-Package serverseitig (Julian)
-- `dummy/mailjet/send` → `node-mailjet` (Julian)
+**Swap pro Integration (Phase 2):**
+- `dummy/matching/examples` + `dummy/matching/recipients` → Weaviate-Client mit semantischem Match. Response MUSS `isGewinner`/`isTeilnehmer`/`isKunde` in `/matching/recipients` mitliefern. (Matthias)
+- `dummy/sql/*` → Drizzle gegen die 5 `v_frontend_*`-Views. Drizzle-Scaffolding ist seit Phase 1.9 vorhanden — [`src/lib/db/schema.ts`](../src/lib/db/schema.ts) + [`src/lib/db/client.ts`](../src/lib/db/client.ts) + `drizzle.config.ts`. (Matthias DB-Seite, Julian Route-Seite)
+- `dummy/classify-recipient` → entweder eigenständiger Endpoint oder wegfallend, falls die Booleans bereits in `/matching/recipients` mitkommen. (Matthias)
+- `dummy/feedback` → Append-only `ml_feedback`-Tabelle, Matthias nutzt das für Score-Ranking. (Matthias)
+- `dummy/render/mjml` → bleibt Frontend-lokal, kein Swap nötig. (Julian)
+- `dummy/mailjet/send` → `node-mailjet` nach MVP-Kundenabnahme, Post-DKIM. (Julian)
 
 Die Umstellung geschieht pro Integration isoliert, das Frontend bleibt unverändert.
 
@@ -400,6 +361,10 @@ Die Umstellung geschieht pro Integration isoliert, das Frontend bleibt unveränd
 
 ## Verweise
 
+- Endpoint-Kontrakt für Matthias: [`docs/backend-endpoints-kontrakt.md`](backend-endpoints-kontrakt.md)
+- SQL-View-DDLs: [`docs/sql-views-ddl-vorschlag.md`](sql-views-ddl-vorschlag.md)
+- Schema-Snapshot: [`docs/db-exploration.md`](db-exploration.md)
+- Drizzle-Scaffolding: [`src/lib/db/schema.ts`](../src/lib/db/schema.ts), [`src/lib/db/client.ts`](../src/lib/db/client.ts)
 - Projekt-Doku im Vault: `alpino-kb/wiki/clients/bauservice/projects/bauservice-email-automation.md`
 - Angebot v2 (2026-01): `alpino-kb/wiki/clients/bauservice/proposals/bauservice-2026-01-email-automation.md`
 - Live-Portal (Demo): https://www.bauservice.it/de/intranet/beschluesse-projekte.html
