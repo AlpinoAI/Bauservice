@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCampaignStore } from "@/lib/campaign-store";
 import { EmailPreview } from "@/components/review/email-preview";
+import { CampaignStepper } from "@/components/campaign-stepper";
 
 type SendResult = {
   jobId: string;
@@ -131,6 +132,11 @@ export default function VersandPage({
 
   return (
     <main className="mx-auto w-full max-w-6xl px-8 py-8">
+        <CampaignStepper
+          activeStep="versand"
+          campaignId={id}
+          origin={campaign.origin}
+        />
         <header className="mb-4 flex items-start justify-between">
           <div>
             <div className="mb-1 flex items-center gap-2">

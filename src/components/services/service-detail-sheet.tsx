@@ -230,7 +230,7 @@ function ServiceSpecificFields({ item }: { item: Example }) {
     if (b.beschlussDatum)
       rows.push({ label: "Beschluss-Datum", value: b.beschlussDatum });
     if (b.status) rows.push({ label: "Status", value: b.status });
-    if (b.projektyp) rows.push({ label: "Projekttyp", value: b.projektyp });
+    if (b.projekttyp) rows.push({ label: "Projekttyp", value: b.projekttyp });
   } else if (item.service === "baukonzessionen") {
     const k = item as KonzessionExample;
     if (k.gemeinde) rows.push({ label: "Gemeinde", value: k.gemeinde });

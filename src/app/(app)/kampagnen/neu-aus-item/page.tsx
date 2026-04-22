@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ItemPicker } from "@/components/item-picker";
 import { Button } from "@/components/ui/button";
+import { CampaignStepper } from "@/components/campaign-stepper";
 import { serviceLabels } from "@/lib/filter-options";
 import type { Recipient, Service, WithScore } from "@/lib/types";
 
@@ -59,6 +60,7 @@ export default function NeuAusItemPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl px-8 py-8">
+        <CampaignStepper activeStep="auswahl" origin="item" />
         <header className="mb-6">
           <div className="text-xs font-medium uppercase tracking-wide text-blue-600">
             Aus Services · Schritt 1

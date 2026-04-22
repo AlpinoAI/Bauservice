@@ -21,6 +21,7 @@ import { ApprovalBar } from "./approval-bar";
 import { EditableTextBlock } from "./editable-text-block";
 import { ScenarioSelector } from "./scenario-selector";
 import { RecipientSwapSheet } from "./recipient-swap-sheet";
+import { CampaignStepper } from "@/components/campaign-stepper";
 import { servicesOrder, serviceLabels } from "@/lib/filter-options";
 
 type RenderPayloadInput = {
@@ -209,6 +210,11 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
   return (
     <div className="flex min-h-screen flex-col">
       <div className="mx-auto w-full max-w-7xl px-8 py-6 pb-24">
+        <CampaignStepper
+          activeStep="review"
+          campaignId={campaignId}
+          origin={campaign.origin}
+        />
         <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="mb-1 flex items-center gap-2">
