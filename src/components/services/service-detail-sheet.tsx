@@ -234,11 +234,30 @@ function ServiceSpecificFields({ item }: { item: Example }) {
   } else if (item.service === "baukonzessionen") {
     const k = item as KonzessionExample;
     if (k.gemeinde) rows.push({ label: "Gemeinde", value: k.gemeinde });
-    if (k.konzessionenTyp)
-      rows.push({ label: "Typ", value: k.konzessionenTyp });
+    if (k.konzessionenTyp) {
+      rows.push({
+        label: "Typ",
+        value: k.konzessionenTypvariante
+          ? `${k.konzessionenTyp} (${k.konzessionenTypvariante})`
+          : k.konzessionenTyp,
+      });
+    }
     if (k.name) rows.push({ label: "Bauherr", value: k.name });
+    if (k.projektantName) {
+      rows.push({ label: "Projektant", value: k.projektantName });
+    } else if (k.projektantId) {
+      rows.push({
+        label: "Projektant",
+        value: `ID ${k.projektantId} (nicht aufgelöst)`,
+      });
+    }
     if (k.adresse) rows.push({ label: "Adresse", value: k.adresse });
-    if (k.ort) rows.push({ label: "Ort", value: k.ort });
+    if (k.ort) {
+      rows.push({
+        label: "Ort",
+        value: k.plz ? `${k.plz} ${k.ort}` : k.ort,
+      });
+    }
   }
 
   if (rows.length === 0) return null;

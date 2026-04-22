@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, Check } from "lucide-react";
 import { SearchFilterBar, type FilterSpec } from "./search-filter-bar";
+import { RecipientDetailSheet } from "./recipient-detail-sheet";
+import { RollenBadges } from "./rollen-badges";
 import { useDebounced } from "@/lib/use-debounced";
 import type { Recipient, RecipientSegment } from "@/lib/types";
 import { bezirke, rollenOptions } from "@/lib/filter-options";
@@ -30,6 +32,7 @@ export function RecipientPicker({
   const [segment, setSegment] = useState<RecipientSegment>("alle");
   const [items, setItems] = useState<Recipient[]>([]);
   const [loading, setLoading] = useState(false);
+  const [detailRecipient, setDetailRecipient] = useState<Recipient | null>(null);
 
   const debouncedQuery = useDebounced(query, 200);
 
@@ -84,12 +87,14 @@ export function RecipientPicker({
     },
   ];
 
+  // Feste Spaltenbreiten statt `auto`, damit leere Zellen (kein Bezirk, keine
+  // Gewerke) die Ausrichtung nicht verschieben.
   const gridCols =
     mode === "select"
-      ? "grid-cols-[auto_1fr_auto_auto_auto]"
+      ? "grid-cols-[auto_minmax(0,1fr)_180px_170px_48px_200px]"
       : onStartCampaign
-        ? "grid-cols-[1fr_auto_auto_auto_auto]"
-        : "grid-cols-[1fr_auto_auto_auto]";
+        ? "grid-cols-[minmax(0,1fr)_180px_170px_48px_200px_auto]"
+        : "grid-cols-[minmax(0,1fr)_180px_170px_48px_200px]";
 
   return (
     <div className="space-y-4">
@@ -103,7 +108,7 @@ export function RecipientPicker({
         leading={<SegmentToggle value={segment} onChange={setSegment} />}
       />
 
-      <div className="rounded-lg border border-zinc-200 bg-white">
+      <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
         <div
           className={cn(
             "grid items-center gap-4 border-b border-zinc-100 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-zinc-500",
@@ -112,9 +117,10 @@ export function RecipientPicker({
         >
           {mode === "select" && <div className="w-5" />}
           <div>Name</div>
-          <div>Bezirk</div>
-          <div>Sprache</div>
-          <div>Rolle</div>
+          <div>Gemeinde / Bezirk</div>
+          <div>Gewerke</div>
+          <div className="text-center">Sprache</div>
+          <div>Rollen</div>
           {mode === "browse" && onStartCampaign && <div />}
         </div>
 
@@ -130,16 +136,32 @@ export function RecipientPicker({
           <ul className="divide-y divide-zinc-100">
             {items.map((r) => {
               const selected = selectedIds.includes(r.id);
+              const displayName = r.sprache === "it" ? r.nameIt : r.nameDe;
+              const ap = r.ansprechpartner;
+              const apLine = ap
+                ? [ap.titel, ap.vorname, ap.nachname].filter(Boolean).join(" ")
+                : null;
+              const locationLine = r.gemeindeDe ?? r.bezirkDe ?? null;
+              const bezirkBelow =
+                r.gemeindeDe && r.bezirkDe ? r.bezirkDe : null;
+              const gewerke = r.gewerke ?? [];
+
               return (
                 <li
                   key={r.id}
                   className={cn(
                     "grid items-center gap-4 px-4 py-3 text-sm transition",
                     gridCols,
-                    mode === "select" && "cursor-pointer",
-                    selected ? "bg-blue-50" : mode === "select" ? "hover:bg-zinc-50" : "hover:bg-zinc-50"
+                    selected ? "bg-blue-50" : "hover:bg-zinc-50",
+                    mode === "select" && "cursor-pointer"
                   )}
-                  onClick={() => mode === "select" && toggle(r.id)}
+                  onClick={() => {
+                    if (mode === "select") {
+                      toggle(r.id);
+                    } else {
+                      setDetailRecipient(r);
+                    }
+                  }}
                 >
                   {mode === "select" && (
                     <span
@@ -154,20 +176,55 @@ export function RecipientPicker({
                       {selected && <Check size={14} strokeWidth={3} />}
                     </span>
                   )}
-                  <div>
-                    <div className="font-medium text-zinc-900">
-                      {r.sprache === "it" ? r.nameIt : r.nameDe}
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-zinc-900">
+                      {displayName}
                     </div>
-                    <div className="text-xs text-zinc-500">{r.email}</div>
-                  </div>
-                  <div className="text-zinc-700">{r.bezirkDe ?? "—"}</div>
-                  <div className="uppercase text-zinc-500">{r.sprache}</div>
-                  <div className="flex gap-1">
-                    {r.rollen.anbieter && <Badge variant="blue">Anbieter</Badge>}
-                    {r.rollen.kunde && <Badge variant="green">Kunde</Badge>}
-                    {r.rollen.ausschreiber && (
-                      <Badge variant="amber">Ausscheiber</Badge>
+                    {apLine ? (
+                      <div className="truncate text-xs text-zinc-600">
+                        {apLine}
+                      </div>
+                    ) : (
+                      <div className="truncate text-xs text-zinc-400">
+                        {r.email}
+                      </div>
                     )}
+                  </div>
+                  <div className="min-w-0 text-zinc-700">
+                    {locationLine ? (
+                      <>
+                        <div className="truncate">{locationLine}</div>
+                        {bezirkBelow && (
+                          <div className="truncate text-xs text-zinc-500">
+                            {bezirkBelow}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-zinc-400">—</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {gewerke.length === 0 ? (
+                      <span className="text-zinc-400">—</span>
+                    ) : (
+                      <>
+                        {gewerke.slice(0, 2).map((g) => (
+                          <Badge key={g} variant="neutral">
+                            {g}
+                          </Badge>
+                        ))}
+                        {gewerke.length > 2 && (
+                          <Badge variant="gray">+{gewerke.length - 2}</Badge>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <div className="text-center uppercase text-zinc-500">
+                    {r.sprache}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    <RollenBadges rollen={r.rollen} />
                   </div>
                   {mode === "browse" && onStartCampaign && (
                     <button
@@ -191,6 +248,23 @@ export function RecipientPicker({
           </ul>
         )}
       </div>
+
+      {mode === "browse" && (
+        <RecipientDetailSheet
+          open={detailRecipient !== null}
+          recipient={detailRecipient}
+          onClose={() => setDetailRecipient(null)}
+          onStartCampaign={
+            onStartCampaign
+              ? (r) => {
+                  setDetailRecipient(null);
+                  void onStartCampaign(r);
+                }
+              : undefined
+          }
+          starting={startingId === detailRecipient?.id}
+        />
+      )}
     </div>
   );
 }
