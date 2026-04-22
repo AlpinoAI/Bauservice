@@ -17,6 +17,7 @@ export type Recipient = {
   pec?: string;
   bezirkDe?: string;
   provinz?: string;
+  gewerke?: string[];
   rollen: {
     ausschreiber: boolean;
     anbieter: boolean;
