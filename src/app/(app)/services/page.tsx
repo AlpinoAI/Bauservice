@@ -469,17 +469,18 @@ function KonzessionenTable({
   onStart,
   onDetail,
 }: TableBaseProps<KonzessionExample>) {
-  const cols = 7;
+  const cols = 8;
   return (
     <table className="w-full text-sm">
       <thead className="border-b border-zinc-100 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
         <tr>
           <th className="px-4 py-2 text-left">Gemeinde</th>
           <th className="px-4 py-2 text-left">Typ</th>
-          <th className="px-4 py-2 text-left">Bauvorhaben</th>
+          <th className="px-4 py-2 text-left">Bauherr</th>
+          <th className="px-4 py-2 text-left">Projektant</th>
+          <th className="px-4 py-2 text-left">Beschreibung</th>
           <th className="px-4 py-2 text-left">Kategorien</th>
           <th className="px-4 py-2 text-left">Adresse</th>
-          <th className="px-4 py-2 text-left">Datum</th>
           <th className="px-4 py-2" />
         </tr>
       </thead>
@@ -500,14 +501,30 @@ function KonzessionenTable({
                 )}
               </td>
               <td className="px-4 py-2.5 whitespace-nowrap">
-                {it.konzessionenTyp && (
-                  <Badge variant="blue">{it.konzessionenTyp}</Badge>
+                {it.konzessionenTyp ? (
+                  <div className="flex flex-col gap-0.5">
+                    <Badge variant="blue">{it.konzessionenTyp}</Badge>
+                    {it.konzessionenTypvariante && (
+                      <span className="text-[10px] uppercase tracking-wide text-zinc-500">
+                        {it.konzessionenTypvariante}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-zinc-400">—</span>
+                )}
+              </td>
+              <td className="max-w-[200px] px-4 py-2.5 font-medium text-zinc-900">
+                {it.name ?? <span className="font-normal text-zinc-400">—</span>}
+              </td>
+              <td className="max-w-[180px] px-4 py-2.5 text-xs text-zinc-700">
+                {it.projektantName ?? (
+                  <span className="text-zinc-400">
+                    {it.projektantId ? `ID ${it.projektantId}` : "—"}
+                  </span>
                 )}
               </td>
               <td className="max-w-[280px] px-4 py-2.5 text-zinc-800">
-                {it.name && (
-                  <div className="font-medium text-zinc-900">{it.name}</div>
-                )}
                 <p className="line-clamp-2 text-zinc-700">{it.beschreibungDe}</p>
               </td>
               <td className="px-4 py-2.5">
@@ -516,11 +533,11 @@ function KonzessionenTable({
               <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-700">
                 {it.adresse ?? "—"}
                 {it.ort && (
-                  <div className="text-zinc-500">{it.ort}</div>
+                  <div className="text-zinc-500">
+                    {it.plz ? `${it.plz} ` : ""}
+                    {it.ort}
+                  </div>
                 )}
-              </td>
-              <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-700">
-                {it.datum ?? "—"}
               </td>
               <td className="px-4 py-2.5 text-right">
                 <div className="inline-flex items-center gap-1">

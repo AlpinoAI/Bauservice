@@ -30,6 +30,18 @@ export type Recipient = {
   provinz?: string;
   gewerke?: string[];
   ansprechpartner?: Ansprechpartner;
+  /** VectorDB_Kontakte.Telefonnummer — 94 % Coverage. */
+  telefon?: string;
+  /** VectorDB_Kontakte.Handynummer — 33 %. */
+  handynummer?: string;
+  /** VectorDB_Kontakte.Webseite — 44 %. Ohne `https://` gespeichert. */
+  webseite?: string;
+  /** VectorDB_Kontakte.Anschrift_D — 99.7 %. */
+  anschrift?: string;
+  /** VectorDB_Kontakte.Postleitzahl. */
+  plz?: string;
+  /** VectorDB_Kontakte.inGemeinde_d — feiner als `bezirkDe`. */
+  gemeindeDe?: string;
   rollen: {
     ausschreiber: boolean;
     anbieter: boolean;
@@ -100,9 +112,17 @@ export type KonzessionExample = ExampleBase & {
   kategorien?: string[];
   gemeinde?: string;
   konzessionenTyp?: string;
+  /** VectorDB_Konzessionen.KonzessionenTypvariante — z.B. "AA", "B", "DR". */
+  konzessionenTypvariante?: string;
+  /** VectorDB_Konzessionen.Name — Bauherr (Person oder Firma). */
   name?: string;
   adresse?: string;
   ort?: string;
+  plz?: string;
+  /** VectorDB_Konzessionen.Projektant — oft 0/unauflösbar. */
+  projektantId?: number;
+  /** Aus `Projektant` via Kontakte-Join. */
+  projektantName?: string;
 };
 
 export type Example =

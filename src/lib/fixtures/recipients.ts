@@ -1247,10 +1247,136 @@ function parseAnsprechpartner(nameDe: string): Ansprechpartner | undefined {
   return { titel, nachname, vorname, anrede };
 }
 
+// Detail-Anreicherung aus der Live-DB (Telefon/Handy/Webseite/Anschrift/PLZ/
+// Gemeinde + strukturierter Ansprechpartner aus Vorname/Nachname/Geschlecht/
+// Anrede_i). In Production liefert Matthias' v_frontend_recipients diese
+// Felder direkt; hier punktuell für ~15 Anker-Kontakte gepflegt, damit das
+// Kontakt-Detail-Sheet aussagekräftig wird.
+type RecipientDetail = Partial<
+  Pick<
+    Recipient,
+    "telefon" | "handynummer" | "webseite" | "anschrift" | "plz" | "gemeindeDe"
+  >
+> & {
+  ansprechpartner?: Ansprechpartner;
+};
+
+const detailsById: Record<number, RecipientDetail> = {
+  4: {
+    telefon: "0474 651500",
+    webseite: "www.ahrntal.eu",
+    anschrift: "Klausbergstraße 85",
+    plz: "39030",
+    gemeindeDe: "Ahrntal",
+  },
+  206: {
+    telefon: "0472 823500",
+    webseite: "www.swb.it",
+    anschrift: "A.-Amonn-Str. 24",
+    plz: "39042",
+    gemeindeDe: "Brixen",
+  },
+  255: {
+    telefon: "0471 225111",
+    webseite: "www.ae-ew.it",
+    anschrift: "Zwölfmalgreienerstr. 8",
+    plz: "39100",
+    gemeindeDe: "Bozen",
+  },
+  859: {
+    telefon: "0474 652197",
+    webseite: "www.elektrorbi.com",
+    anschrift: "St. Jakob 106",
+    plz: "39030",
+    gemeindeDe: "Ahrntal",
+    ansprechpartner: { anrede: "Herr", vorname: "Helmut", nachname: "Brugger" },
+  },
+  1227: {
+    telefon: "0471 810167",
+    handynummer: "348 2508502",
+    webseite: "www.volcan.bz",
+    anschrift: "Max-Valierstr. 5",
+    plz: "39040",
+    gemeindeDe: "Auer",
+    ansprechpartner: { anrede: "Herr", vorname: "Guido", nachname: "Volcan" },
+  },
+  1531: {
+    telefon: "0471 925356",
+    webseite: "www.athesia.it",
+    anschrift: "Weinbergweg 7",
+    plz: "39100",
+    gemeindeDe: "Bozen",
+    ansprechpartner: {
+      anrede: "Herr",
+      vorname: "Michl",
+      nachname: "Ebner",
+      titel: "Dott.",
+    },
+  },
+  1589: {
+    telefon: "0471 650010",
+    webseite: "www.tischlerei-moser.com",
+    anschrift: "Barbianerstr. 5",
+    plz: "39040",
+    gemeindeDe: "Barbian",
+  },
+  3943: {
+    telefon: "0471 816800",
+    webseite: "www.selgas.bz.it",
+    anschrift: "Bruno-Buozzi-Str. 12",
+    plz: "39100",
+    gemeindeDe: "Bozen",
+  },
+  4178: {
+    telefon: "0471 414550",
+    anschrift: "Cesare-Battisti-Straße 23",
+    plz: "39100",
+    gemeindeDe: "Bozen",
+  },
+  7242: {
+    telefon: "0471 810679",
+    webseite: "www.spornberger.it",
+    anschrift: "Traminerstr. 12",
+    plz: "39040",
+    gemeindeDe: "Auer",
+    ansprechpartner: {
+      anrede: "Herr",
+      vorname: "Thomas",
+      nachname: "Spornberger",
+    },
+  },
+  11571: {
+    telefon: "0471 055055",
+    webseite: "www.eurac.edu",
+    anschrift: "Drususallee 1",
+    plz: "39100",
+    gemeindeDe: "Bozen",
+  },
+  13783: {
+    telefon: "0471 650025",
+    handynummer: "328 3780992",
+    webseite: "www.moebelkreativ.com",
+    anschrift: "St. Jakob 48",
+    plz: "39040",
+    gemeindeDe: "Barbian",
+    ansprechpartner: { anrede: "Herr", vorname: "Thomas", nachname: "Schrott" },
+  },
+  35941: {
+    telefon: "051 7199111",
+    webseite: "www.it.strabag.com",
+    anschrift: "Bahnhofstr. 8",
+    plz: "39100",
+    gemeindeDe: "Bozen",
+    ansprechpartner: { anrede: "Herr", vorname: "Andrea", nachname: "Marzi" },
+  },
+};
+
 export const recipientsFixture: Recipient[] = baseRecipients.map((r) => {
-  if (r.ansprechpartner) return r;
-  const parsed = parseAnsprechpartner(r.nameDe);
-  return parsed ? { ...r, ansprechpartner: parsed } : r;
+  const detail = detailsById[r.id];
+  const withDetail = detail ? { ...r, ...detail } : r;
+  if (withDetail.ansprechpartner) return withDetail;
+  const parsed = parseAnsprechpartner(withDetail.nameDe);
+  return parsed ? { ...withDetail, ansprechpartner: parsed } : withDetail;
 });
 
 export function segmentFilter(
