@@ -2,6 +2,37 @@
 
 **Stand 2026-04-22 · Autor: Julian · Adressat: Matthias**
 
+## Start here
+
+**Lies in dieser Reihenfolge:**
+1. Diesen Kontrakt komplett durch (§ 1–9), vor allem den § 9 Opt-out-Hartfilter.
+2. [`docs/sql-views-ddl-vorschlag.md`](sql-views-ddl-vorschlag.md) — 5 MySQL-View-DDLs + 3 Persistenz-Tabellen + Berechtigungen + Smoke-Tests.
+3. Die TypeScript-Schemas unter [`src/lib/db/schema.ts`](../src/lib/db/schema.ts) — Spaltennamen und Typen sind kanonisch für das Frontend.
+4. Zum Verhalten: die Dummy-Endpoints unter [`src/app/api/dummy/`](../src/app/api/dummy/) — das ist **der Behavioral-Spec**. JSON-Shapes und Filter-Verhalten dort sind der Gold-Standard; deine Implementierung muss das 1:1 liefern.
+
+**Empfohlene Implementierungsreihenfolge** (jeder Schritt ist einzeln deploybar und unblockiert etwas Frontend-seitig):
+
+| Reihe | Endpoint/View | Unblockt |
+|---|---|---|
+| 1 | `v_frontend_recipients` + `GET /sql/recipients` | Kontaktliste, Recipient-Picker, Login-Test |
+| 2 | `v_frontend_{ausschreibungen,ergebnisse,beschluesse,konzessionen}` + `GET /sql/items` | Services-Tabelle, Item-Picker |
+| 3 | `POST /matching/examples` und `POST /matching/recipients` (inkl. `isGewinner`/`isTeilnehmer`/`isKunde`) | Review-Flow, Auto-Klassifikation, Vorschläge |
+| 4 | `POST /classify-recipient` (optional, falls Booleans in Matching-Response reichen) | Fallback-Pfad |
+| 5 | `GET /sql/suggestions` | Dashboard-Widget |
+| 6 | `campaigns` + `campaign_recipients` Persistenz + `GET/POST/PATCH /sql/campaigns[/id]` | Kampagnen-Liste, Draft-Persistenz |
+| 7 | `ml_feedback` + `POST /feedback` | ML-Training-Signale |
+
+**Zwei Entscheidungen liegen bei dir:**
+- View-Refresh-Strategie: materialized (mit Sync-Job) oder live-view? → bestimmt Weaviate-Reindex-Kadenz.
+- Feedback-Persistenz: reicht append-only wie im DDL-Vorschlag, oder brauchst du mehr Struktur fürs ML-Training?
+
+**Was du NICHT brauchst (Julian-Seite oder separat):**
+- Mailjet-Integration, DKIM, Auth-Flow, Render-Pipeline, Frontend-Routes.
+
+---
+
+## Überblick
+
 Dieses Dokument beschreibt die HTTP-API zwischen dem Next.js-Frontend und den Matching-/DB-Services, die Matthias in Phase 2 liefert. In Phase 1 existieren alle Endpoints als Dummies unter `app/api/dummy/*` mit Fixture-Daten. **Die Response-Shapes sind der harte Kontrakt** — Matthias' echte Endpoints müssen dieselben Felder liefern, damit das Frontend ohne Änderung umgeschaltet werden kann.
 
 ## Inhalt
