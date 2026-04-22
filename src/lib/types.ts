@@ -6,6 +6,8 @@ export type Service =
 
 export type Sprache = "de" | "it";
 
+export type ScenarioId = "A" | "B" | "C" | "D";
+
 export type Recipient = {
   id: number;
   nameDe: string;
@@ -41,6 +43,10 @@ export type ExampleBase = {
 export type AusschreibungExample = ExampleBase & {
   service: "ausschreibungen";
   ausschreiberId?: number;
+  ausschreiberName?: string;
+  nummer?: string;
+  kategorien?: string[];
+  frist?: string;
   betrag?: number;
   cig?: string;
   cup?: string;
@@ -91,6 +97,7 @@ export type Campaign = {
   origin: "recipient" | "item";
   itemRef?: { service: Service; itemId: number };
   recipientIds: number[];
+  scenarioId?: ScenarioId;
   createdAt: string;
   createdBy: string;
 };
@@ -98,6 +105,7 @@ export type Campaign = {
 export type RenderPayload = {
   templateId: string;
   sprache: Sprache;
+  scenarioId?: ScenarioId;
   payload: {
     recipient: { nameDe: string; nameIt: string };
     examples: Record<Service, Example[]>;

@@ -61,14 +61,15 @@ export default function NeuAusItemPage() {
     <main className="mx-auto w-full max-w-6xl px-8 py-8">
         <header className="mb-6">
           <div className="text-xs font-medium uppercase tracking-wide text-blue-600">
-            Richtung B · Schritt 1
+            Aus Services · Schritt 1
           </div>
           <h1 className="mt-1 text-2xl font-semibold">
             Ausschreibung, Projekt oder Konzession wählen
           </h1>
           <p className="mt-1 text-sm text-zinc-600">
-            Neue Einträge chronologisch. Das ausgewählte Item bleibt im Review
-            das dominierende — passende Empfänger werden automatisch vorgeschlagen.
+            Neue Einträge chronologisch. Der ausgewählte Eintrag bleibt im
+            Review das dominierende Service-Element — passende Empfänger werden
+            automatisch aus dem Matching vorgeschlagen.
           </p>
         </header>
 
@@ -82,13 +83,15 @@ export default function NeuAusItemPage() {
                 · ID {selected.itemId}
               </span>
             ) : (
-              <span className="text-zinc-500">Noch kein Item ausgewählt.</span>
+              <span className="text-zinc-500">
+                Noch kein Service-Eintrag ausgewählt.
+              </span>
             )}
           </div>
           <div className="flex items-center gap-3">
             {error && <span className="text-xs text-red-600">{error}</span>}
             <Button disabled={!selected || loading} onClick={onNext}>
-              {loading ? "Lege an…" : "Weiter zu Empfängern"}
+              {loading ? "Lege an…" : "Weiter zum Review"}
             </Button>
           </div>
         </div>

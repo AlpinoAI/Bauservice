@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createCampaign, listCampaigns } from "@/lib/fixtures/campaigns";
-import type { Service } from "@/lib/types";
+import { visibleRecipients } from "@/lib/fixtures/recipients";
+import type { ScenarioId, Service } from "@/lib/types";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -17,6 +18,7 @@ export async function POST(req: Request) {
     origin?: "recipient" | "item";
     itemRef?: { service: Service; itemId: number };
     recipientIds?: number[];
+    scenarioId?: ScenarioId;
     createdBy?: string;
   };
 
@@ -27,12 +29,26 @@ export async function POST(req: Request) {
     );
   }
 
+  let recipientIds = body.recipientIds ?? [];
+
+  if (
+    recipientIds.length === 0 &&
+    body.origin === "item" &&
+    body.itemRef
+  ) {
+    recipientIds = visibleRecipients()
+      .filter((r) => r.rollen.anbieter)
+      .slice(0, 20)
+      .map((r) => r.id);
+  }
+
   const campaign = createCampaign({
     name: body.name,
     origin: body.origin,
     status: "draft",
     itemRef: body.itemRef,
-    recipientIds: body.recipientIds ?? [],
+    recipientIds,
+    scenarioId: body.scenarioId,
     createdBy: body.createdBy ?? "bauservice-user",
   });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import { SearchFilterBar, type FilterSpec } from "./search-filter-bar";
 import { useDebounced } from "@/lib/use-debounced";
 import type { Recipient, RecipientSegment } from "@/lib/types";
@@ -13,12 +13,16 @@ type Props = {
   mode?: "select" | "browse";
   selectedIds?: number[];
   onSelectionChange?: (ids: number[]) => void;
+  onStartCampaign?: (recipient: Recipient) => void | Promise<void>;
+  startingId?: number | null;
 };
 
 export function RecipientPicker({
   mode = "select",
   selectedIds = [],
   onSelectionChange,
+  onStartCampaign,
+  startingId = null,
 }: Props) {
   const [query, setQuery] = useState("");
   const [bezirk, setBezirk] = useState("");
@@ -80,6 +84,13 @@ export function RecipientPicker({
     },
   ];
 
+  const gridCols =
+    mode === "select"
+      ? "grid-cols-[auto_1fr_auto_auto_auto]"
+      : onStartCampaign
+        ? "grid-cols-[1fr_auto_auto_auto_auto]"
+        : "grid-cols-[1fr_auto_auto_auto]";
+
   return (
     <div className="space-y-4">
       <SearchFilterBar
@@ -96,9 +107,7 @@ export function RecipientPicker({
         <div
           className={cn(
             "grid items-center gap-4 border-b border-zinc-100 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-zinc-500",
-            mode === "select"
-              ? "grid-cols-[auto_1fr_auto_auto_auto]"
-              : "grid-cols-[1fr_auto_auto_auto]"
+            gridCols
           )}
         >
           {mode === "select" && <div className="w-5" />}
@@ -106,6 +115,7 @@ export function RecipientPicker({
           <div>Bezirk</div>
           <div>Sprache</div>
           <div>Rolle</div>
+          {mode === "browse" && onStartCampaign && <div />}
         </div>
 
         {loading && items.length === 0 ? (
@@ -125,10 +135,9 @@ export function RecipientPicker({
                   key={r.id}
                   className={cn(
                     "grid items-center gap-4 px-4 py-3 text-sm transition",
-                    mode === "select"
-                      ? "cursor-pointer grid-cols-[auto_1fr_auto_auto_auto]"
-                      : "grid-cols-[1fr_auto_auto_auto]",
-                    selected ? "bg-blue-50" : mode === "select" ? "hover:bg-zinc-50" : ""
+                    gridCols,
+                    mode === "select" && "cursor-pointer",
+                    selected ? "bg-blue-50" : mode === "select" ? "hover:bg-zinc-50" : "hover:bg-zinc-50"
                   )}
                   onClick={() => mode === "select" && toggle(r.id)}
                 >
@@ -160,6 +169,22 @@ export function RecipientPicker({
                       <Badge variant="amber">Ausscheiber</Badge>
                     )}
                   </div>
+                  {mode === "browse" && onStartCampaign && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void onStartCampaign(r);
+                      }}
+                      disabled={startingId !== null}
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
+                    >
+                      {startingId === r.id
+                        ? "Lege an …"
+                        : "Kampagne starten"}
+                      {startingId !== r.id && <ArrowRight size={12} />}
+                    </button>
+                  )}
                 </li>
               );
             })}

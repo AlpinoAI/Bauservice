@@ -1,10 +1,12 @@
 "use client";
 
 import { create } from "zustand";
+import { scenarioFromService } from "@/lib/scenarios";
 import type {
   Campaign,
   Example,
   Recipient,
+  ScenarioId,
   Service,
   Sprache,
   WithScore,
@@ -25,6 +27,7 @@ export type RecipientDraft = {
 type CampaignState = {
   campaignId: string | null;
   campaign: Campaign | null;
+  scenarioId: ScenarioId;
   drafts: Record<number, RecipientDraft>;
   examplesByService: Record<Service, PoolExample[]>;
   activeRecipientId: number | null;
@@ -35,6 +38,7 @@ type CampaignState = {
 
 type CampaignActions = {
   setCampaign: (c: Campaign) => void;
+  setScenario: (id: ScenarioId) => void;
   setLoading: (loading: boolean) => void;
   addDraft: (draft: RecipientDraft) => void;
   setActiveRecipient: (id: number) => void;
@@ -82,6 +86,7 @@ const emptyEnabled = (): Record<Service, boolean> => ({
 const initialState: CampaignState = {
   campaignId: null,
   campaign: null,
+  scenarioId: "A",
   drafts: {},
   examplesByService: emptyByService<PoolExample>(),
   activeRecipientId: null,
@@ -94,7 +99,20 @@ export const useCampaignStore = create<CampaignState & CampaignActions>(
   (set) => ({
     ...initialState,
 
-    setCampaign: (c) => set({ campaignId: c.id, campaign: c }),
+    setCampaign: (c) => {
+      const scenarioId =
+        c.scenarioId ??
+        (c.origin === "item" && c.itemRef
+          ? scenarioFromService(c.itemRef.service)
+          : "A");
+      set({ campaignId: c.id, campaign: c, scenarioId });
+    },
+    setScenario: (id) =>
+      set((s) =>
+        s.scenarioId === id
+          ? s
+          : { scenarioId: id, renderCache: {}, isDirty: true }
+      ),
     setLoading: (loading) => set({ loading }),
 
     addDraft: (draft) =>

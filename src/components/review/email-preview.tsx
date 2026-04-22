@@ -2,18 +2,15 @@
 
 import { useState } from "react";
 import { useCampaignStore } from "@/lib/campaign-store";
+import { scenarioCopy } from "@/lib/scenarios";
 import { cn } from "@/lib/utils";
 
 type Props = { recipientId: number };
 
-const subjectByLang = {
-  de: "Aktuelle Bauvorhaben in Ihrer Region",
-  it: "Nuovi progetti edili nella vostra zona",
-} as const;
-
 export function EmailPreview({ recipientId }: Props) {
   const rendered = useCampaignStore((s) => s.renderCache[recipientId]);
   const draft = useCampaignStore((s) => s.drafts[recipientId]);
+  const scenarioId = useCampaignStore((s) => s.scenarioId);
   const [tab, setTab] = useState<"html" | "text">("html");
 
   const name = draft
@@ -22,7 +19,8 @@ export function EmailPreview({ recipientId }: Props) {
       : draft.recipient.nameDe
     : "";
   const email = draft?.recipient.email ?? "";
-  const subject = draft ? subjectByLang[draft.sprache] : subjectByLang.de;
+  const sprache = draft?.sprache ?? "de";
+  const subject = scenarioCopy[scenarioId][sprache].subject;
 
   return (
     <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">

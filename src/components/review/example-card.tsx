@@ -5,6 +5,7 @@ import { Repeat2, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import type { Example, Service } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { ScoreBar } from "@/components/ui/score-bar";
+import { betragOf, formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -18,20 +19,6 @@ type Props = {
   onRemove: () => void;
   pinned?: boolean;
 };
-
-function betragOf(it: Example): number | undefined {
-  if ("betrag" in it) return it.betrag;
-  return undefined;
-}
-
-function formatCurrency(value?: number): string | null {
-  if (typeof value !== "number") return null;
-  return new Intl.NumberFormat("de-DE", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
 
 export function ExampleCard({
   example,
@@ -79,7 +66,7 @@ export function ExampleCard({
         {example.bezirk && <Badge variant="neutral">{example.bezirk}</Badge>}
         {example.gewerk && <Badge variant="blue">{example.gewerk}</Badge>}
         {betrag && <Badge variant="gray">{betrag}</Badge>}
-        {pinned && <Badge variant="amber">Ursprungs-Item</Badge>}
+        {pinned && <Badge variant="amber">Ursprungs-Service</Badge>}
         {typeof score === "number" && (
           <ScoreBar value={score} className="ml-auto" />
         )}

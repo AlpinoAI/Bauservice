@@ -1,8 +1,9 @@
 import { convert as htmlToText } from "html-to-text";
-import type { Example, RenderPayload, Service } from "@/lib/types";
+import type { Example, RenderPayload, ScenarioId, Service } from "@/lib/types";
 import { servicesOrder } from "@/lib/filter-options";
+import { scenarioCopy, scenarios } from "@/lib/scenarios";
 
-const TEMPLATE_VERSION = "v3";
+const TEMPLATE_VERSION = "v4-scenarios";
 
 const serviceLabelDe: Record<Service, string> = {
   ausschreibungen: "Aktuelle Ausschreibungen",
@@ -17,27 +18,6 @@ const serviceLabelIt: Record<Service, string> = {
   beschluesse: "Delibere e progetti",
   baukonzessionen: "Concessioni edilizie",
 };
-
-const defaults = {
-  de: {
-    preview: "Aktuelle Informationen aus dem Bauservice-Netzwerk",
-    intro:
-      "nachfolgend eine persönliche Auswahl passender Informationen für Sie.",
-    cta: "Für weitere Details kontaktieren Sie uns gerne.",
-    footer: "Bauservice KG · Brixen",
-    salutationPrefix: "Sehr geehrte Damen und Herren bei",
-    salutationFallback: "Sehr geehrte Damen und Herren,",
-  },
-  it: {
-    preview: "Informazioni aggiornate dalla rete Bauservice",
-    intro:
-      "di seguito trovate una selezione personalizzata basata sui vostri interessi.",
-    cta: "Contattateci per ulteriori informazioni.",
-    footer: "Bauservice KG · Bressanone",
-    salutationPrefix: "Gentili signori di",
-    salutationFallback: "Gentili signori,",
-  },
-} as const;
 
 function escape(s: string): string {
   return s
@@ -116,13 +96,17 @@ function buildExampleCard(it: Example, sprache: "de" | "it"): string {
 function buildSection(
   label: string,
   items: Example[],
-  sprache: "de" | "it"
+  sprache: "de" | "it",
+  isFocus: boolean = false
 ): string {
   if (items.length === 0) return "";
   const cards = items.map((it) => buildExampleCard(it, sprache)).join("");
+  const heading = isFocus
+    ? `<td style="padding-top:24px;padding-bottom:8px;font-size:15px;font-weight:700;color:#2563eb;letter-spacing:-0.01em;">${escape(label)}</td>`
+    : `<td style="padding-top:24px;padding-bottom:8px;font-size:15px;font-weight:600;color:#0f172a;letter-spacing:-0.01em;">${escape(label)}</td>`;
   return `
     <tr>
-      <td style="padding-top:24px;padding-bottom:8px;font-size:15px;font-weight:600;color:#0f172a;letter-spacing:-0.01em;">${escape(label)}</td>
+      ${heading}
     </tr>
     <tr>
       <td>
@@ -135,29 +119,43 @@ function buildSection(
 
 function buildSalutation(
   payload: RenderPayload["payload"],
-  sprache: "de" | "it"
+  sprache: "de" | "it",
+  scenarioId: ScenarioId
 ): string {
   const override = payload.overrides?.salutation;
   if (override) return escape(override);
-  const d = defaults[sprache];
+  const copy = scenarioCopy[scenarioId][sprache];
   const recipient =
     sprache === "it" ? payload.recipient.nameIt : payload.recipient.nameDe;
   if (recipient && recipient.trim().length > 0) {
-    return `${escape(d.salutationPrefix)} <strong>${escape(recipient)}</strong>,`;
+    return `${escape(copy.salutationPrefix)} <strong>${escape(recipient)}</strong>,`;
   }
-  return escape(d.salutationFallback);
+  return escape(copy.salutationFallback);
 }
 
-function buildHtml(payload: RenderPayload["payload"], sprache: "de" | "it"): string {
-  const d = defaults[sprache];
-  const salutation = buildSalutation(payload, sprache);
-  const intro = escape(payload.overrides?.intro || d.intro);
-  const cta = escape(payload.overrides?.cta || d.cta);
+function buildHtml(
+  payload: RenderPayload["payload"],
+  sprache: "de" | "it",
+  scenarioId: ScenarioId
+): string {
+  const copy = scenarioCopy[scenarioId][sprache];
+  const focusService = scenarios[scenarioId].service;
+  const salutation = buildSalutation(payload, sprache, scenarioId);
+  const intro = escape(payload.overrides?.intro || copy.intro);
+  const cta = escape(payload.overrides?.cta || copy.cta);
   const labels = sprache === "it" ? serviceLabelIt : serviceLabelDe;
 
-  const sections = servicesOrder
+  const orderedServices = [
+    focusService,
+    ...servicesOrder.filter((s) => s !== focusService),
+  ];
+
+  const sections = orderedServices
     .filter((s) => payload.serviceEnabled[s])
-    .map((s) => buildSection(labels[s], payload.examples[s] ?? [], sprache))
+    .map((s) => {
+      const label = s === focusService ? copy.focusHeading : labels[s];
+      return buildSection(label, payload.examples[s] ?? [], sprache, s === focusService);
+    })
     .join("");
 
   return `<!doctype html>
@@ -194,7 +192,7 @@ function buildHtml(payload: RenderPayload["payload"], sprache: "de" | "it"): str
                     <td style="padding-top:26px;border-top:1px solid #e4e4e7;padding-bottom:6px;">&nbsp;</td>
                   </tr>
                   <tr>
-                    <td style="padding-top:4px;font-size:11px;color:#71717a;">${escape(d.footer)}</td>
+                    <td style="padding-top:4px;font-size:11px;color:#71717a;">${escape(copy.footer)}</td>
                   </tr>
                 </table>
               </td>
@@ -213,7 +211,7 @@ const cache = new Map<string, RenderResult>();
 const MAX_CACHE = 200;
 
 function cacheKey(payload: RenderPayload): string {
-  return `${TEMPLATE_VERSION}|${payload.sprache}|${JSON.stringify(payload.payload)}`;
+  return `${TEMPLATE_VERSION}|${payload.sprache}|${payload.scenarioId ?? "A"}|${JSON.stringify(payload.payload)}`;
 }
 
 export function render(payload: RenderPayload): RenderResult {
@@ -221,7 +219,8 @@ export function render(payload: RenderPayload): RenderResult {
   const hit = cache.get(key);
   if (hit) return hit;
 
-  const html = buildHtml(payload.payload, payload.sprache);
+  const scenarioId: ScenarioId = payload.scenarioId ?? "A";
+  const html = buildHtml(payload.payload, payload.sprache, scenarioId);
 
   const text = htmlToText(html, {
     wordwrap: 78,

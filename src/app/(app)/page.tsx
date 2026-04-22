@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DashboardKpis } from "@/components/dashboard-kpis";
 import { LatestCampaigns } from "@/components/latest-campaigns";
+import { SuggestedCampaigns } from "@/components/suggested-campaigns";
 
 export default function DashboardPage() {
   return (
@@ -11,6 +12,8 @@ export default function DashboardPage() {
           Übersicht deiner Bauservice-Aktivitäten.
         </p>
       </header>
+
+      <SuggestedCampaigns />
 
       <DashboardKpis />
 
@@ -28,27 +31,29 @@ export default function DashboardPage() {
           </h2>
           <div className="grid gap-2">
             <Link
-              href="/kampagnen/neu-aus-kontakt"
-              className="rounded-lg border border-zinc-200 bg-white p-4 transition hover:border-blue-500 hover:shadow-sm"
-            >
-              <div className="text-xs font-medium uppercase tracking-wide text-blue-600">
-                Richtung A
-              </div>
-              <h3 className="mt-1 text-sm font-medium">Kampagne aus Kontakt</h3>
-              <p className="mt-1 text-xs text-zinc-600">
-                Gezielte Suche im Empfänger-Stamm.
-              </p>
-            </Link>
-            <Link
               href="/kampagnen/neu-aus-item"
               className="rounded-lg border border-zinc-200 bg-white p-4 transition hover:border-blue-500 hover:shadow-sm"
             >
               <div className="text-xs font-medium uppercase tracking-wide text-blue-600">
-                Richtung B
+                Empfohlen
               </div>
-              <h3 className="mt-1 text-sm font-medium">Kampagne aus Item</h3>
+              <h3 className="mt-1 text-sm font-medium">Kampagne aus Service</h3>
               <p className="mt-1 text-xs text-zinc-600">
-                Neue Ausschreibungen, Projekte, Konzessionen durchstöbern.
+                Neue Ausschreibungen, Projekte oder Konzessionen durchstöbern.
+                Empfänger kommen per Matching.
+              </p>
+            </Link>
+            <Link
+              href="/services"
+              className="rounded-lg border border-zinc-200 bg-white p-4 transition hover:border-blue-500 hover:shadow-sm"
+            >
+              <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Browse
+              </div>
+              <h3 className="mt-1 text-sm font-medium">Services-Übersicht</h3>
+              <p className="mt-1 text-xs text-zinc-600">
+                Alle vier Service-Quellen in einer Tabelle. Pro Zeile direkt
+                starten.
               </p>
             </Link>
             <Link

@@ -35,10 +35,11 @@ export function EditableTextBlock({ recipientId, draft }: Props) {
 
   return (
     <section className="space-y-4 rounded-lg border border-zinc-200 bg-white p-4">
-      <h3 className="text-sm font-semibold">Text-Anpassungen</h3>
+      <h3 className="text-sm font-semibold">Text-Anpassungen pro Empfänger</h3>
       <p className="text-xs text-zinc-500">
-        Überschreibt den Standardtext für diesen einen Empfänger. Leer lassen =
-        Standard verwenden (Platzhaltertext unten).
+        Überschreibt den Szenario-Standardtext für genau diesen Empfänger. Leer
+        lassen = Szenario-Template verwenden (siehe Auswahl oben, Platzhalter
+        unten).
       </p>
       <div className="space-y-3">
         {keys.map((key) => {

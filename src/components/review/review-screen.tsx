@@ -5,6 +5,7 @@ import type {
   Campaign,
   Example,
   Recipient,
+  ScenarioId,
   Service,
   WithScore,
 } from "@/lib/types";
@@ -16,6 +17,8 @@ import { ServicePanel } from "./service-panel";
 import { EmailPreview } from "./email-preview";
 import { ApprovalBar } from "./approval-bar";
 import { EditableTextBlock } from "./editable-text-block";
+import { ScenarioSelector } from "./scenario-selector";
+import { ItemRecipientsNote } from "./item-recipients-note";
 import { servicesOrder, serviceLabels } from "@/lib/filter-options";
 
 const DEFAULT_N = 3;
@@ -23,9 +26,10 @@ const DEFAULT_N = 3;
 type RenderPayloadInput = {
   draft: RecipientDraft;
   pool: Record<Service, Example[]>;
+  scenarioId: ScenarioId;
 };
 
-function buildRenderPayload({ draft, pool }: RenderPayloadInput) {
+function buildRenderPayload({ draft, pool, scenarioId }: RenderPayloadInput) {
   const examples: Record<Service, Example[]> = {
     ausschreibungen: [],
     ergebnisse: [],
@@ -40,6 +44,7 @@ function buildRenderPayload({ draft, pool }: RenderPayloadInput) {
   return {
     templateId: "default",
     sprache: draft.sprache,
+    scenarioId,
     payload: {
       recipient: {
         nameDe: draft.recipient.nameDe,
@@ -54,12 +59,10 @@ function buildRenderPayload({ draft, pool }: RenderPayloadInput) {
 
 export function ReviewScreen({ campaignId }: { campaignId: string }) {
   const campaign = useCampaignStore((s) => s.campaign);
+  const scenarioId = useCampaignStore((s) => s.scenarioId);
   const activeId = useCampaignStore((s) => s.activeRecipientId);
   const drafts = useCampaignStore((s) => s.drafts);
-  const examplesByService = useCampaignStore((s) => s.examplesByService);
   const loading = useCampaignStore((s) => s.loading);
-
-  const setRender = useCampaignStore((s) => s.setRender);
 
   const activeDraft = activeId ? drafts[activeId] : null;
   const loadedRef = useRef<string | null>(null);
@@ -98,7 +101,7 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
             if (pinItem) {
               pinnedExampleId = pinItem.id;
               useCampaignStore.getState().addToPool(c.itemRef.service, [
-                { ...pinItem, score: 1, reason: "Ursprungs-Item der Kampagne" },
+                { ...pinItem, score: 1, reason: "Ursprungs-Eintrag der Kampagne" },
               ]);
             }
           }
@@ -154,15 +157,21 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
       en: activeDraft.serviceEnabled,
       ov: activeDraft.overrides,
       sp: activeDraft.sprache,
+      sc: scenarioId,
     });
-  }, [activeDraft]);
+  }, [activeDraft, scenarioId]);
 
   useEffect(() => {
-    if (!activeDraft) return;
+    if (!renderKey) return;
     const timer = setTimeout(async () => {
+      const state = useCampaignStore.getState();
+      const rid = state.activeRecipientId;
+      const draft = rid ? state.drafts[rid] : null;
+      if (!draft) return;
       const payload = buildRenderPayload({
-        draft: activeDraft,
-        pool: examplesByService,
+        draft,
+        pool: state.examplesByService,
+        scenarioId: state.scenarioId,
       });
       try {
         const res = await fetch("/api/dummy/render/mjml", {
@@ -172,13 +181,13 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
         });
         if (!res.ok) return;
         const data = (await res.json()) as { html: string; text: string };
-        setRender(activeDraft.recipientId, data.html, data.text);
+        state.setRender(draft.recipientId, data.html, data.text);
       } catch {
         // ignore
       }
     }, 350);
     return () => clearTimeout(timer);
-  }, [renderKey, activeDraft, examplesByService, setRender]);
+  }, [renderKey]);
 
   if (loading || !campaign) {
     return (
@@ -210,7 +219,7 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
           <div>
             <div className="mb-1 flex items-center gap-2">
               <Badge variant="blue">
-                Richtung {campaign.origin === "recipient" ? "A" : "B"}
+                {campaign.origin === "recipient" ? "Aus Kontakt" : "Aus Services"}
               </Badge>
               <Badge variant="gray">Draft</Badge>
               {pinnedService && (
@@ -226,6 +235,10 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
             </p>
           </div>
         </header>
+
+        <ScenarioSelector />
+
+        {campaign.origin === "item" && <ItemRecipientsNote total={list.length} />}
 
         <RecipientTabs />
 

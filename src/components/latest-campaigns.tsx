@@ -56,7 +56,7 @@ export function LatestCampaigns({ limit = 5 }: Props) {
                   {c.status === "sent" ? "Versandt" : "Entwurf"}
                 </Badge>
                 <Badge variant="blue">
-                  Richtung {c.origin === "recipient" ? "A" : "B"}
+                  {c.origin === "recipient" ? "Aus Kontakt" : "Aus Services"}
                 </Badge>
               </div>
               <div className="mt-1 font-medium text-zinc-900">{c.name}</div>
