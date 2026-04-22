@@ -45,4 +45,5 @@ Es gibt ein älteres Repo **"Bauservice Frontend"** (MVP, MCP-Setup). Dieses wir
 - Deutsche Sprache als Projektstandard (Dokumentation, Commit-Messages können Englisch bleiben)
 - Konzept-Dokumente in `/docs/`
 - Keine Secrets im Repo (`.env.local` ist gitignored)
-- Kein `git push` ohne explizite Freigabe — Julian pusht selbst
+- `git push` ist erlaubt, sobald Julian in der aktuellen Session explizit darum bittet. Ohne diese Aufforderung nicht pushen.
+- `git push --force` / Force-Push auf `main` bleibt tabu — immer erst Rückfrage, dann ein regulärer Merge- oder Rebase-Flow.
