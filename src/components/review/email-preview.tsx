@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pencil, Save, X } from "lucide-react";
+import { Info, Pencil, RotateCcw, Save, X } from "lucide-react";
 import { useCampaignStore } from "@/lib/campaign-store";
 import { getContent } from "@/lib/email-template-content";
 import { scenarios, scenariosOrder } from "@/lib/scenarios";
@@ -117,14 +117,19 @@ export function EmailPreview({ recipientId }: Props) {
       </div>
       {draft && (
         <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 bg-zinc-50/70 px-3 py-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+          <span
+            className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500"
+            title="Das System schlägt den Kundentyp basierend auf Rolle & Historie des Empfängers vor. Du kannst jederzeit auf einen anderen Typ wechseln."
+          >
             Kundentyp
+            <Info size={10} className="text-zinc-400" aria-hidden />
           </span>
           <div className="flex flex-wrap gap-1">
             {scenariosOrder.map((id) => {
               const s = scenarios[id];
               const label = sprache === "it" ? s.labelIt : s.labelDe;
               const isActive = scenarioId === id;
+              const isSystemPick = id === draft.autoScenarioId;
               return (
                 <button
                   key={id}
@@ -135,20 +140,39 @@ export function EmailPreview({ recipientId }: Props) {
                   aria-pressed={isActive}
                   title={sprache === "it" ? s.descriptionIt : s.descriptionDe}
                   className={cn(
-                    "rounded-md border px-2 py-0.5 text-[11px] font-medium transition",
+                    "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition",
                     isActive
                       ? "border-blue-500 bg-blue-600 text-white"
                       : "border-zinc-200 bg-white text-zinc-700 hover:border-blue-400 hover:text-blue-700"
                   )}
                 >
                   {label}
+                  {isSystemPick && (
+                    <span
+                      aria-hidden
+                      title="System-Vorschlag basiert auf Empfängerprofil"
+                      className={cn(
+                        "text-[9px]",
+                        isActive ? "text-blue-100" : "text-amber-500"
+                      )}
+                    >
+                      ★
+                    </span>
+                  )}
                 </button>
               );
             })}
           </div>
-          <span className="ml-auto rounded bg-white px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-500 ring-1 ring-zinc-200">
-            vorausgewählt: System
-          </span>
+          {scenarioId !== draft.autoScenarioId && (
+            <button
+              type="button"
+              onClick={() => setDraftScenario(recipientId, draft.autoScenarioId)}
+              className="ml-auto inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-600 ring-1 ring-zinc-200 transition hover:text-blue-600"
+              title="Auf System-Vorschlag zurücksetzen"
+            >
+              <RotateCcw size={9} /> Manuell geändert
+            </button>
+          )}
         </div>
       )}
       {draft && (

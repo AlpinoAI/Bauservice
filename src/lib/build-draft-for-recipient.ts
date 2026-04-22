@@ -58,12 +58,23 @@ export async function buildDraftForRecipient(
     : "D";
 
   const draft = buildEmptyDraft(recipient, scenarioId);
-  for (const { service, items } of matchingResults) {
-    let ids = items.slice(0, DEFAULT_SELECTION_SIZE).map((it) => it.id);
-    if (pinnedItem && itemRef?.service === service && !ids.includes(pinnedItem.id)) {
-      ids = [pinnedItem.id, ...ids.slice(0, DEFAULT_SELECTION_SIZE - 1)];
+  if (pinnedItem && itemRef) {
+    // Item-Flow: Email enthält ausschließlich das in Schritt 1 gewählte Item.
+    // Andere Services werden deaktiviert, damit die Mail auf den einen Trigger
+    // fokussiert bleibt (Zuschlag / Projekt / Konzession).
+    for (const svc of servicesOrder) {
+      if (svc === itemRef.service) {
+        draft.selectedExamples[svc] = [pinnedItem.id];
+      } else {
+        draft.serviceEnabled[svc] = false;
+      }
     }
-    draft.selectedExamples[service] = ids;
+  } else {
+    for (const { service, items } of matchingResults) {
+      draft.selectedExamples[service] = items
+        .slice(0, DEFAULT_SELECTION_SIZE)
+        .map((it) => it.id);
+    }
   }
 
   return { draft, matching: matchingResults };
