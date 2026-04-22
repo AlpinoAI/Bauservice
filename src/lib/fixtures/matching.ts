@@ -9,9 +9,9 @@ import {
 import { recipientsFixture, visibleRecipients } from "@/lib/fixtures/recipients";
 import { bezirkItToDe, type Gewerk } from "@/lib/filter-options";
 
-// Grobe Gewerk-Heuristik bis der echte Endpoint Kategorien pro Kontakt liefert.
-// Stichworte aus dem Firmennamen (deutsch + italienisch) auf den Gewerk-Katalog
-// aus filter-options.ts mappen.
+// Fallback-Heuristik für Kontakte ohne `gewerke` — matcht Firmennamen (deutsch + italienisch)
+// auf den Gewerk-Katalog aus filter-options.ts. Wird nur herangezogen, wenn der Datensatz
+// keine explizite Gewerke-Liste aus VectorDB_Kontakte.Unterkategorie_wird_zusammengeführt hat.
 const gewerkKeywords: Array<[RegExp, Gewerk]> = [
   [/elektr|elettric/i, "Elektro"],
   [/sanit[aä]r|idraulic|impianti sanit|riscaldamento|termo/i, "Sanitär"],
@@ -26,6 +26,7 @@ const gewerkKeywords: Array<[RegExp, Gewerk]> = [
 ];
 
 function gewerkFor(recipient: Recipient): string[] {
+  if (recipient.gewerke && recipient.gewerke.length > 0) return recipient.gewerke;
   const name = `${recipient.nameDe} ${recipient.nameIt}`;
   const hits = new Set<Gewerk>();
   for (const [re, gewerk] of gewerkKeywords) {
