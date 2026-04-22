@@ -1379,18 +1379,14 @@ export const recipientsFixture: Recipient[] = baseRecipients.map((r) => {
   return parsed ? { ...withDetail, ansprechpartner: parsed } : withDetail;
 });
 
-export function segmentOf(r: Recipient): "neu" | "bestand" | null {
-  if (r.rollen.kunde || r.hatHistorie) return "bestand";
-  if (r.rollen.anbieter) return "neu";
-  return null;
-}
-
 export function segmentFilter(
   r: Recipient,
   segment: "neu" | "bestand" | "alle"
 ): boolean {
   if (segment === "alle") return true;
-  return segmentOf(r) === segment;
+  const bestand = r.rollen.kunde || r.hatHistorie;
+  if (segment === "bestand") return bestand;
+  return r.rollen.anbieter && !bestand;
 }
 
 export function visibleRecipients(): Recipient[] {

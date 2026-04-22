@@ -22,6 +22,7 @@ export async function GET(req: Request) {
   const q = url.searchParams.get("q")?.trim() ?? "";
   const bezirk = url.searchParams.get("bezirk")?.trim();
   const rolle = url.searchParams.get("rolle")?.trim();
+  const gewerk = url.searchParams.get("gewerk")?.trim();
   const segment =
     (url.searchParams.get("segment") as RecipientSegment | null) ?? "alle";
   const limitRaw = Number(url.searchParams.get("limit") ?? "50");
@@ -38,6 +39,7 @@ export async function GET(req: Request) {
       if (rolle === "kunde") return r.rollen.kunde;
       return true;
     })
+    .filter((r) => (gewerk ? !!r.gewerke?.includes(gewerk) : true))
     .filter((r) => segmentFilter(r, segment))
     .slice(0, limit);
 

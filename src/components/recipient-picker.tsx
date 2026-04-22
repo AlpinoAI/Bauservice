@@ -7,9 +7,9 @@ import { RecipientDetailSheet } from "./recipient-detail-sheet";
 import { RollenBadges } from "./rollen-badges";
 import { useDebounced } from "@/lib/use-debounced";
 import type { Recipient, RecipientSegment } from "@/lib/types";
-import { bezirke, rollenOptions } from "@/lib/filter-options";
-import { segmentOf } from "@/lib/fixtures/recipients";
+import { bezirke, gewerke, rollenOptions } from "@/lib/filter-options";
 import { Badge } from "@/components/ui/badge";
+import { ansprechpartnerLabel, isBestandskunde } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -30,6 +30,7 @@ export function RecipientPicker({
   const [query, setQuery] = useState("");
   const [bezirk, setBezirk] = useState("");
   const [rolle, setRolle] = useState("");
+  const [gewerk, setGewerk] = useState("");
   const [segment, setSegment] = useState<RecipientSegment>("alle");
   const [items, setItems] = useState<Recipient[]>([]);
   const [loading, setLoading] = useState(false);
@@ -45,6 +46,7 @@ export function RecipientPicker({
       if (debouncedQuery) params.set("q", debouncedQuery);
       if (bezirk) params.set("bezirk", bezirk);
       if (rolle) params.set("rolle", rolle);
+      if (gewerk) params.set("gewerk", gewerk);
       params.set("segment", segment);
       try {
         const res = await fetch(`/api/dummy/sql/recipients?${params}`, {
@@ -60,7 +62,7 @@ export function RecipientPicker({
       }
     })();
     return () => ctrl.abort();
-  }, [debouncedQuery, bezirk, rolle, segment]);
+  }, [debouncedQuery, bezirk, rolle, gewerk, segment]);
 
   function toggle(id: number) {
     if (!onSelectionChange) return;
@@ -80,6 +82,13 @@ export function RecipientPicker({
       options: bezirke.map((b) => ({ value: b, label: b })),
     },
     {
+      name: "gewerk",
+      label: "Gewerk",
+      value: gewerk,
+      onChange: setGewerk,
+      options: gewerke.map((g) => ({ value: g, label: g })),
+    },
+    {
       name: "rolle",
       label: "Rolle",
       value: rolle,
@@ -88,8 +97,7 @@ export function RecipientPicker({
     },
   ];
 
-  // Feste Spaltenbreiten statt `auto`, damit leere Zellen (kein Bezirk, keine
-  // Gewerke) die Ausrichtung nicht verschieben.
+  // Feste Spaltenbreiten statt `auto`, damit leere Zellen die Ausrichtung nicht verschieben.
   const gridCols =
     mode === "select"
       ? "grid-cols-[auto_minmax(0,1fr)_90px_180px_170px_48px_200px]"
@@ -117,7 +125,7 @@ export function RecipientPicker({
           )}
         >
           {mode === "select" && <div className="w-5" />}
-          <div>Name</div>
+          <div>Name / Ansprechpartner</div>
           <div>Typ</div>
           <div>Gemeinde / Bezirk</div>
           <div>Gewerke</div>
@@ -139,15 +147,12 @@ export function RecipientPicker({
             {items.map((r) => {
               const selected = selectedIds.includes(r.id);
               const displayName = r.sprache === "it" ? r.nameIt : r.nameDe;
-              const ap = r.ansprechpartner;
-              const apLine = ap
-                ? [ap.titel, ap.vorname, ap.nachname].filter(Boolean).join(" ")
-                : null;
+              const apLine = ansprechpartnerLabel(r.ansprechpartner);
+              const bestand = isBestandskunde(r);
               const locationLine = r.gemeindeDe ?? r.bezirkDe ?? null;
               const bezirkBelow =
                 r.gemeindeDe && r.bezirkDe ? r.bezirkDe : null;
-              const gewerke = r.gewerke ?? [];
-              const typ = segmentOf(r);
+              const rGewerke = r.gewerke ?? [];
 
               return (
                 <li
@@ -194,13 +199,9 @@ export function RecipientPicker({
                     )}
                   </div>
                   <div>
-                    {typ === "bestand" ? (
-                      <Badge variant="green">Bestand</Badge>
-                    ) : typ === "neu" ? (
-                      <Badge variant="blue">Neu</Badge>
-                    ) : (
-                      <span className="text-zinc-400">—</span>
-                    )}
+                    <Badge variant={bestand ? "green" : "blue"}>
+                      {bestand ? "Bestand" : "Neu"}
+                    </Badge>
                   </div>
                   <div className="min-w-0 text-zinc-700">
                     {locationLine ? (
@@ -217,17 +218,17 @@ export function RecipientPicker({
                     )}
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    {gewerke.length === 0 ? (
+                    {rGewerke.length === 0 ? (
                       <span className="text-zinc-400">—</span>
                     ) : (
                       <>
-                        {gewerke.slice(0, 2).map((g) => (
+                        {rGewerke.slice(0, 2).map((g) => (
                           <Badge key={g} variant="neutral">
                             {g}
                           </Badge>
                         ))}
-                        {gewerke.length > 2 && (
-                          <Badge variant="gray">+{gewerke.length - 2}</Badge>
+                        {rGewerke.length > 2 && (
+                          <Badge variant="gray">+{rGewerke.length - 2}</Badge>
                         )}
                       </>
                     )}

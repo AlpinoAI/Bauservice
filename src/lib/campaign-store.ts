@@ -19,6 +19,9 @@ export type RecipientDraft = {
   recipient: Recipient;
   sprache: Sprache;
   scenarioId: ScenarioId;
+  /** Vom System (classifyRecipient) vorgeschlagener Kundentyp bei Draft-Erstellung.
+   * Wird nie überschrieben; erlaubt UI-Hinweis wenn User `scenarioId` manuell ändert. */
+  autoScenarioId: ScenarioId;
   selectedExamples: Record<Service, number[]>;
   serviceEnabled: Record<Service, boolean>;
   overrides: EmailOverrides;
@@ -323,6 +326,7 @@ export function buildEmptyDraft(
     recipient,
     sprache: recipient.sprache,
     scenarioId,
+    autoScenarioId: scenarioId,
     selectedExamples: emptyByService<number>(),
     serviceEnabled: emptyEnabled(),
     overrides: {},
