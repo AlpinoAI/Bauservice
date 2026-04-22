@@ -7,18 +7,36 @@ import {
   konzessionenFixture,
 } from "@/lib/fixtures/items";
 import { recipientsFixture, visibleRecipients } from "@/lib/fixtures/recipients";
+import { bezirkItToDe, type Gewerk } from "@/lib/filter-options";
 
-const recipientGewerkHints: Record<number, string[]> = {
-  1001: ["Hochbau"],
-  1002: ["Hochbau"],
-  1003: ["Tiefbau"],
-  1004: ["Elektro"],
-  1005: ["Sanitär"],
-  1008: ["Hochbau"],
-};
+// Grobe Gewerk-Heuristik bis der echte Endpoint Kategorien pro Kontakt liefert.
+// Stichworte aus dem Firmennamen (deutsch + italienisch) auf den Gewerk-Katalog
+// aus filter-options.ts mappen.
+const gewerkKeywords: Array<[RegExp, Gewerk]> = [
+  [/elektr|elettric/i, "Elektro"],
+  [/sanit[aä]r|idraulic|impianti sanit|riscaldamento|termo/i, "Sanitär"],
+  [/tiefbau|stradal|sottosuolo|genio civil|scavi/i, "Tiefbau"],
+  [/hochbau|edil|costruz|bau gmbh|bau kg|bauunternehm/i, "Hochbau"],
+  [/holzbau|zimmer|carpent|dach|copertur|lattonier/i, "Zimmerei"],
+  [/tischler|arreda|falegn/i, "Tischlerei"],
+  [/schlosser|fabbro|metall/i, "Schlosserei"],
+  [/maler|imbianc|restaur/i, "Maler"],
+  [/architekt|arch\.|geom\.|ingenieur|planer|progett|servizi tecnici/i, "Planung"],
+  [/hotel|tourism/i, "Hotellerie"],
+];
 
 function gewerkFor(recipient: Recipient): string[] {
-  return recipientGewerkHints[recipient.id] ?? [];
+  const name = `${recipient.nameDe} ${recipient.nameIt}`;
+  const hits = new Set<Gewerk>();
+  for (const [re, gewerk] of gewerkKeywords) {
+    if (re.test(name)) hits.add(gewerk);
+  }
+  return Array.from(hits);
+}
+
+function normalizeBezirk(b: string | undefined): string | undefined {
+  if (!b) return undefined;
+  return bezirkItToDe[b] ?? b;
 }
 
 function scoreValue(gewerkMatch: boolean, regionMatch: boolean): number {
@@ -62,7 +80,7 @@ export function matchExamplesForRecipient(
       ? gewerkeRec.includes(item.gewerk)
       : false;
     const regionMatch =
-      !!recipient.bezirkDe && recipient.bezirkDe === item.bezirk;
+      !!recipient.bezirkDe && recipient.bezirkDe === normalizeBezirk(item.bezirk);
     return {
       ...item,
       score: Number(scoreValue(gewerkMatch, regionMatch).toFixed(3)),
@@ -94,7 +112,7 @@ export function matchRecipientsForItem(
   const scored = candidates.map<WithScore<Recipient>>((r) => {
     const gewerkeRec = gewerkFor(r);
     const gewerkMatch = item.gewerk ? gewerkeRec.includes(item.gewerk) : false;
-    const regionMatch = !!r.bezirkDe && r.bezirkDe === item.bezirk;
+    const regionMatch = !!r.bezirkDe && r.bezirkDe === normalizeBezirk(item.bezirk);
     return {
       ...r,
       score: Number(scoreValue(gewerkMatch, regionMatch).toFixed(3)),
