@@ -1,5 +1,6 @@
 import { convert as htmlToText } from "html-to-text";
 import type {
+  Ansprechpartner,
   AusschreibungExample,
   BeschlussExample,
   ErgebnisExample,
@@ -201,13 +202,31 @@ function buildSection(
     </tr>`;
 }
 
+function personSalutation(person: Ansprechpartner, pack: ContentPack): string {
+  const body = person.titel
+    ? `${person.titel} ${person.nachname}`
+    : person.vorname
+      ? `${person.vorname} ${person.nachname}`
+      : person.nachname;
+  const prefix =
+    person.anrede === "Frau"
+      ? pack.personSalutation.frau
+      : pack.personSalutation.herr;
+  return `${prefix} ${body},`;
+}
+
 function buildSalutation(
   payload: RenderPayload["payload"],
   sprache: Sprache,
-  scenario: ScenarioContent
+  scenario: ScenarioContent,
+  pack: ContentPack
 ): string {
   const override = payload.overrides?.salutation;
   if (override) return escape(override);
+  const person = payload.recipient.ansprechpartner;
+  if (person) {
+    return escape(personSalutation(person, pack));
+  }
   const recipient =
     sprache === "it" ? payload.recipient.nameIt : payload.recipient.nameDe;
   if (recipient && recipient.trim().length > 0) {
@@ -307,7 +326,7 @@ function buildHtml(
     return { html, subject };
   }
 
-  const salutation = buildSalutation(payload, sprache, scenario);
+  const salutation = buildSalutation(payload, sprache, scenario, pack);
   const hook = escape(payload.overrides?.hook || scenario.hook);
   const bridge = escape(payload.overrides?.bridge || scenario.bridge);
   const ctaOpening = escape(scenario.ctaOpening);

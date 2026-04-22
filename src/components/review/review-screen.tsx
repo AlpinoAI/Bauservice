@@ -58,6 +58,7 @@ function buildRenderPayload({
       recipient: {
         nameDe: draft.recipient.nameDe,
         nameIt: draft.recipient.nameIt,
+        ansprechpartner: draft.recipient.ansprechpartner,
       },
       examples,
       serviceEnabled: draft.serviceEnabled,

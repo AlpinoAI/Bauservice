@@ -40,6 +40,10 @@ export const deContent: ContentPack = {
     beschluesse: "Beschlüsse & Projekte",
     baukonzessionen: "Baukonzessionen",
   },
+  personSalutation: {
+    herr: "Sehr geehrter Herr",
+    frau: "Sehr geehrte Frau",
+  },
   metaLabels: {
     datum: "Datum",
     bezirk: "Bezirk",

@@ -43,6 +43,10 @@ export const itContent: ContentPack = {
     beschluesse: "Delibere e progetti",
     baukonzessionen: "Concessioni edilizie",
   },
+  personSalutation: {
+    herr: "Egregio Sig.",
+    frau: "Gentile Sig.ra",
+  },
   metaLabels: {
     datum: "Data",
     bezirk: "Zona",

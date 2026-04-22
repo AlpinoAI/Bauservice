@@ -13,7 +13,8 @@ export type BuiltDraft = {
   matching: MatchingBundle[];
 };
 
-const DEFAULT_N = 3;
+const DEFAULT_SELECTION_SIZE = 5;
+const MATCHING_POOL_SIZE = 10;
 
 /**
  * Lädt Matching-Items für alle vier Services und die Kundentyp-Klassifizierung
@@ -37,7 +38,7 @@ export async function buildDraftForRecipient(
           body: JSON.stringify({
             recipientId: recipient.id,
             service: svc,
-            n: 5,
+            n: MATCHING_POOL_SIZE,
           }),
         });
         if (!res.ok) return { service: svc, items: [] };
@@ -58,9 +59,9 @@ export async function buildDraftForRecipient(
 
   const draft = buildEmptyDraft(recipient, scenarioId);
   for (const { service, items } of matchingResults) {
-    let ids = items.slice(0, DEFAULT_N).map((it) => it.id);
+    let ids = items.slice(0, DEFAULT_SELECTION_SIZE).map((it) => it.id);
     if (pinnedItem && itemRef?.service === service && !ids.includes(pinnedItem.id)) {
-      ids = [pinnedItem.id, ...ids.slice(0, DEFAULT_N - 1)];
+      ids = [pinnedItem.id, ...ids.slice(0, DEFAULT_SELECTION_SIZE - 1)];
     }
     draft.selectedExamples[service] = ids;
   }

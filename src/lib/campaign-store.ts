@@ -25,6 +25,14 @@ export type RecipientDraft = {
   skip: boolean;
 };
 
+export type FeedbackVerdict = "passt" | "passt_nicht";
+
+/** feedback[recipientId][service][exampleId] = "passt" | "passt_nicht" */
+export type FeedbackMap = Record<
+  number,
+  Partial<Record<Service, Record<number, FeedbackVerdict>>>
+>;
+
 type CampaignState = {
   campaignId: string | null;
   campaign: Campaign | null;
@@ -32,6 +40,7 @@ type CampaignState = {
   examplesByService: Record<Service, PoolExample[]>;
   activeRecipientId: number | null;
   renderCache: Record<number, { html: string; text: string; subject: string }>;
+  feedback: FeedbackMap;
   isDirty: boolean;
   loading: boolean;
 };
@@ -47,6 +56,11 @@ type CampaignActions = {
     recipientId: number,
     service: Service,
     exampleIds: number[]
+  ) => void;
+  setExampleCount: (
+    recipientId: number,
+    service: Service,
+    count: number
   ) => void;
   removeExample: (
     recipientId: number,
@@ -70,6 +84,12 @@ type CampaignActions = {
     html: string,
     text: string,
     subject: string
+  ) => void;
+  setFeedback: (
+    recipientId: number,
+    service: Service,
+    exampleId: number,
+    verdict: FeedbackVerdict | null
   ) => void;
   reset: () => void;
 };
@@ -95,6 +115,7 @@ const initialState: CampaignState = {
   examplesByService: emptyByService<PoolExample>(),
   activeRecipientId: null,
   renderCache: {},
+  feedback: {},
   isDirty: false,
   loading: false,
 };
@@ -154,6 +175,36 @@ export const useCampaignStore = create<CampaignState & CampaignActions>(
             [rid]: {
               ...d,
               selectedExamples: { ...d.selectedExamples, [svc]: ids },
+            },
+          },
+          isDirty: true,
+        };
+      }),
+
+    setExampleCount: (rid, svc, count) =>
+      set((s) => {
+        const d = s.drafts[rid];
+        if (!d || !d.serviceEnabled[svc]) return s;
+        const clamped = Math.max(0, Math.min(count, s.examplesByService[svc].length));
+        const current = d.selectedExamples[svc];
+        if (clamped === current.length) return s;
+        let next: number[];
+        if (clamped < current.length) {
+          next = current.slice(0, clamped);
+        } else {
+          const seen = new Set(current);
+          const topUp = s.examplesByService[svc]
+            .filter((e) => !seen.has(e.id))
+            .slice(0, clamped - current.length)
+            .map((e) => e.id);
+          next = [...current, ...topUp];
+        }
+        return {
+          drafts: {
+            ...s.drafts,
+            [rid]: {
+              ...d,
+              selectedExamples: { ...d.selectedExamples, [svc]: next },
             },
           },
           isDirty: true,
@@ -241,6 +292,23 @@ export const useCampaignStore = create<CampaignState & CampaignActions>(
       set((s) => ({
         renderCache: { ...s.renderCache, [rid]: { html, text, subject } },
       })),
+
+    setFeedback: (rid, svc, exId, verdict) =>
+      set((s) => {
+        const byRecipient = s.feedback[rid] ?? {};
+        const byService = { ...(byRecipient[svc] ?? {}) };
+        if (verdict === null) {
+          delete byService[exId];
+        } else {
+          byService[exId] = verdict;
+        }
+        return {
+          feedback: {
+            ...s.feedback,
+            [rid]: { ...byRecipient, [svc]: byService },
+          },
+        };
+      }),
 
     reset: () => set(initialState),
   })

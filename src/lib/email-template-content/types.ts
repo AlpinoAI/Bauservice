@@ -43,6 +43,14 @@ export type MetaLabels = {
   bauherr: string;
 };
 
+/** Strukturierte Anrede für einen Ansprechpartner mit Geschlecht. */
+export type PersonSalutation = {
+  /** "Sehr geehrter Herr" / "Egregio Sig." */
+  herr: string;
+  /** "Sehr geehrte Frau" / "Gentile Sig.ra" */
+  frau: string;
+};
+
 export type ContentPack = {
   sprache: Sprache;
   locale: string;
@@ -52,6 +60,7 @@ export type ContentPack = {
   signature: Signature;
   serviceLabels: Record<Service, string>;
   metaLabels: MetaLabels;
+  personSalutation: PersonSalutation;
   scenarios: Record<ScenarioId, ScenarioContent>;
 };
 
