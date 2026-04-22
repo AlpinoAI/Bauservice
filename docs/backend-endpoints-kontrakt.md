@@ -31,6 +31,18 @@
 
 ---
 
+## ⚠️ Frontend-Blocker (Priorität)
+
+**Vergabestellen-/Ausschreiber-Auflösung** — `VectorDB_Ausschreibungen.Ausschreiber_id` und `VectorDB_Projektierungen.Ausschreiber` sind int-FKs mit **< 2 % Trefferquote** gegen `VectorDB_Kontakte` ([docs/db-exploration.md §7](db-exploration.md)). Das führt dazu, dass die "Ausschreiber"-Spalte in den Services **Beschlüsse & Projekte** und **Ergebnisse** aktuell fast immer leer bliebe — im Live-Portal ([bauservice.it](https://www.bauservice.it/de/intranet/beschluesse-projekte.html)) wird hier aber immer ein Name gezeigt, was auf eine **separate Vergabestellen-Tabelle** in der Produktions-DB hindeutet, die **nicht** im `VectorDB_*`-Snapshot gespiegelt ist.
+
+**Was wir brauchen, damit das UI vollständig ist:**
+- Entweder die Vergabestellen-Master-Tabelle in den Snapshot spiegeln, damit die `Ausschreiber_id`/`Ausschreiber`-FKs sauber auflösen,
+- oder in den Views `v_frontend_ausschreibungen` / `v_frontend_beschluesse` / `v_frontend_ergebnisse` den Namen **direkt serialisieren** (als `ausschreiber_name`).
+
+Ohne diesen Fix zeigt das Frontend unter "Beschlüsse & Projekte" eine leere Ausschreiber-Spalte. Bitte priorisieren — Aufwand auf deiner Seite ist klein, Wirkung im UI ist groß.
+
+---
+
 ## Überblick
 
 Dieses Dokument beschreibt die HTTP-API zwischen dem Next.js-Frontend und den Matching-/DB-Services, die Matthias in Phase 2 liefert. In Phase 1 existieren alle Endpoints als Dummies unter `app/api/dummy/*` mit Fixture-Daten. **Die Response-Shapes sind der harte Kontrakt** — Matthias' echte Endpoints müssen dieselben Felder liefern, damit das Frontend ohne Änderung umgeschaltet werden kann.
@@ -442,15 +454,18 @@ Das Frontend nimmt `optOut=true`-Empfänger **nicht** mehr an (Klartextprüfung 
 
 ## 10. Offene Punkte
 
-| Punkt | Besitzer | Kommentar |
-|---|---|---|
-| View-Refresh-Frequenz (`VectorDB_*` Sync) | Bauservice/Matthias | Batch täglich? Stündlich? Bestimmt Weaviate-Reindex-Kadenz und Dashboard-Freshness. |
-| Score-Skala-Interpretation | Matthias | Liefert `0..1` kontinuierlich oder bucketiert (high/med/low)? Frontend kann beides darstellen. |
-| Matching-Kriterien jenseits Gewerk/Region | Bauservice | Historische Aufträge (Teilnehmer-Frequenz), Umsatzklasse, Netzwerk? → beeinflusst Score-Formel. |
-| Feedback-Persistenz-Schema | Matthias | Append-only-Tabelle `ml_feedback (recipient_id, service, example_id, verdict, note, at, mitarbeiter_id)` als Startpunkt. |
-| Versand-Audit-Pflichtfelder | Bauservice | Was MUSS pro Versand geloggt werden (DSGVO/Compliance)? |
-| Production-DB-Zugang | Bauservice/Matthias | VPN/SSH-Tunnel + Read-only-Konto. Plain-HTTP-phpMyAdmin ist Interims. |
-| Authentifizierungs-Flow | Kickoff | Magic-Link (Resend) vs. Basic-Auth — blockt nicht die API-Kontrakte. |
+| Punkt | Besitzer | Priorität | Kommentar |
+|---|---|---|---|
+| **Vergabestellen-/Ausschreiber-Auflösung** | Matthias | **🔴 Blocker** | `Ausschreibungen.Ausschreiber_id` + `Projektierungen.Ausschreiber` lösen nur zu < 2 % gegen `Kontakte` auf. Ohne gespiegelte Master-Tabelle oder serialisierten `ausschreiber_name` in den Views bleibt die "Ausschreiber"-Spalte in **Beschlüsse & Projekte** und **Ergebnisse** leer. Siehe Kopf dieses Dokuments + [db-exploration.md §7](db-exploration.md). |
+| `KonzessionenTypvariante`-Codes (AA, B, DR, BL, R) | Bauservice | 🟡 Klärung | Bedeutung der internen Klassifikations-Codes dokumentieren, damit das UI einen Tooltip/Legende anbieten kann (aktuell nur via `title` eingeblendet). |
+| `VectorDB_Projektierungen.Projektyp`/`ProjektArt` IT→DE | Matthias | 🟡 Klärung | Im Live-Portal wird der Prefix "Auftrag Machbarkeitsstudie" / "Genehmigung Ausführungsprojekt" gezeigt — mitliefern oder clientseitig mappen? |
+| View-Refresh-Frequenz (`VectorDB_*` Sync) | Bauservice/Matthias | Normal | Batch täglich? Stündlich? Bestimmt Weaviate-Reindex-Kadenz und Dashboard-Freshness. |
+| Score-Skala-Interpretation | Matthias | Normal | Liefert `0..1` kontinuierlich oder bucketiert (high/med/low)? Frontend kann beides darstellen. |
+| Matching-Kriterien jenseits Gewerk/Region | Bauservice | Normal | Historische Aufträge (Teilnehmer-Frequenz), Umsatzklasse, Netzwerk? → beeinflusst Score-Formel. |
+| Feedback-Persistenz-Schema | Matthias | Normal | Append-only-Tabelle `ml_feedback (recipient_id, service, example_id, verdict, note, at, mitarbeiter_id)` als Startpunkt. |
+| Versand-Audit-Pflichtfelder | Bauservice | Normal | Was MUSS pro Versand geloggt werden (DSGVO/Compliance)? |
+| Production-DB-Zugang | Bauservice/Matthias | Normal | VPN/SSH-Tunnel + Read-only-Konto. Plain-HTTP-phpMyAdmin ist Interims. |
+| Authentifizierungs-Flow | Kickoff | Normal | Magic-Link (Resend) vs. Basic-Auth — blockt nicht die API-Kontrakte. |
 
 ## Verweise
 

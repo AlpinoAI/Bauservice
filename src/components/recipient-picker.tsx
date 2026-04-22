@@ -8,6 +8,7 @@ import { RollenBadges } from "./rollen-badges";
 import { useDebounced } from "@/lib/use-debounced";
 import type { Recipient, RecipientSegment } from "@/lib/types";
 import { bezirke, rollenOptions } from "@/lib/filter-options";
+import { segmentOf } from "@/lib/fixtures/recipients";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -91,10 +92,10 @@ export function RecipientPicker({
   // Gewerke) die Ausrichtung nicht verschieben.
   const gridCols =
     mode === "select"
-      ? "grid-cols-[auto_minmax(0,1fr)_180px_170px_48px_200px]"
+      ? "grid-cols-[auto_minmax(0,1fr)_90px_180px_170px_48px_200px]"
       : onStartCampaign
-        ? "grid-cols-[minmax(0,1fr)_180px_170px_48px_200px_auto]"
-        : "grid-cols-[minmax(0,1fr)_180px_170px_48px_200px]";
+        ? "grid-cols-[minmax(0,1fr)_90px_180px_170px_48px_200px_auto]"
+        : "grid-cols-[minmax(0,1fr)_90px_180px_170px_48px_200px]";
 
   return (
     <div className="space-y-4">
@@ -117,6 +118,7 @@ export function RecipientPicker({
         >
           {mode === "select" && <div className="w-5" />}
           <div>Name</div>
+          <div>Typ</div>
           <div>Gemeinde / Bezirk</div>
           <div>Gewerke</div>
           <div className="text-center">Sprache</div>
@@ -145,6 +147,7 @@ export function RecipientPicker({
               const bezirkBelow =
                 r.gemeindeDe && r.bezirkDe ? r.bezirkDe : null;
               const gewerke = r.gewerke ?? [];
+              const typ = segmentOf(r);
 
               return (
                 <li
@@ -188,6 +191,15 @@ export function RecipientPicker({
                       <div className="truncate text-xs text-zinc-400">
                         {r.email}
                       </div>
+                    )}
+                  </div>
+                  <div>
+                    {typ === "bestand" ? (
+                      <Badge variant="green">Bestand</Badge>
+                    ) : typ === "neu" ? (
+                      <Badge variant="blue">Neu</Badge>
+                    ) : (
+                      <span className="text-zinc-400">—</span>
                     )}
                   </div>
                   <div className="min-w-0 text-zinc-700">

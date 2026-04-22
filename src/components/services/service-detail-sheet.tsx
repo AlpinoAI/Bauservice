@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { KategorienBadges } from "@/components/services/kategorien-badges";
 import { betragOf, formatCurrency } from "@/lib/format";
-import { serviceLabels } from "@/lib/filter-options";
+import { konzessionenTypItToDe, serviceLabels } from "@/lib/filter-options";
 
 type Props = {
   open: boolean;
@@ -235,11 +235,13 @@ function ServiceSpecificFields({ item }: { item: Example }) {
     const k = item as KonzessionExample;
     if (k.gemeinde) rows.push({ label: "Gemeinde", value: k.gemeinde });
     if (k.konzessionenTyp) {
+      const typDe =
+        konzessionenTypItToDe[k.konzessionenTyp] ?? k.konzessionenTyp;
       rows.push({
         label: "Typ",
         value: k.konzessionenTypvariante
-          ? `${k.konzessionenTyp} (${k.konzessionenTypvariante})`
-          : k.konzessionenTyp,
+          ? `${typDe} (${k.konzessionenTypvariante})`
+          : typDe,
       });
     }
     if (k.name) rows.push({ label: "Bauherr", value: k.name });
@@ -251,7 +253,7 @@ function ServiceSpecificFields({ item }: { item: Example }) {
         value: `ID ${k.projektantId} (nicht aufgelöst)`,
       });
     }
-    if (k.adresse) rows.push({ label: "Adresse", value: k.adresse });
+    if (k.adresse) rows.push({ label: "Bauort", value: k.adresse });
     if (k.ort) {
       rows.push({
         label: "Ort",
