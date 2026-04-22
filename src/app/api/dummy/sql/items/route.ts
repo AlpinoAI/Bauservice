@@ -31,7 +31,17 @@ export async function GET(req: Request) {
     );
   }
 
+  const ausschreibungIdRaw = url.searchParams.get("ausschreibungId");
+  const ausschreibungId = ausschreibungIdRaw
+    ? Number(ausschreibungIdRaw)
+    : null;
+
   const items = itemsForService(service)
+    .filter((it) =>
+      ausschreibungId != null && service === "ergebnisse"
+        ? "ausschreibungId" in it && it.ausschreibungId === ausschreibungId
+        : true
+    )
     .filter((it) => (bezirk ? it.bezirk === bezirk : true))
     .filter((it) =>
       q

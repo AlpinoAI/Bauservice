@@ -57,9 +57,14 @@ export type AusschreibungExample = ExampleBase & {
 export type ErgebnisExample = ExampleBase & {
   service: "ergebnisse";
   ausschreibungId: number;
+  ausschreiberId?: number;
+  ausschreiberName?: string;
   teilnehmerId: number;
   teilnehmerNameDe: string;
   teilnehmerNameIt: string;
+  nummer?: string;
+  kategorien?: string[];
+  ausschreibungBetrag?: number;
   betrag?: number;
   punkteBewertung?: number;
   prozent?: number;
@@ -67,15 +72,20 @@ export type ErgebnisExample = ExampleBase & {
 
 export type BeschlussExample = ExampleBase & {
   service: "beschluesse";
+  ausschreiberName?: string;
+  nummer?: string;
+  kategorien?: string[];
   beschlussNr?: string;
   beschlussDatum?: string;
   betrag?: number;
   geschaetzterBetrag?: number;
   status?: string;
+  projektyp?: string;
 };
 
 export type KonzessionExample = ExampleBase & {
   service: "baukonzessionen";
+  kategorien?: string[];
   gemeinde?: string;
   konzessionenTyp?: string;
   name?: string;
@@ -103,6 +113,17 @@ export type Campaign = {
   createdBy: string;
 };
 
+export type EmailOverrides = {
+  salutation?: string;
+  hook?: string;
+  bridge?: string;
+  cta?: string;
+  /** Full-body HTML override coming from the inline WYSIWYG editor. Renderer bypasses template composition when set. */
+  bodyHtml?: string;
+  /** Subject-line override from the editor. */
+  subject?: string;
+};
+
 export type RenderPayload = {
   templateId: string;
   sprache: Sprache;
@@ -111,7 +132,7 @@ export type RenderPayload = {
     recipient: { nameDe: string; nameIt: string };
     examples: Record<Service, Example[]>;
     serviceEnabled: Record<Service, boolean>;
-    overrides?: { salutation?: string; intro?: string; cta?: string };
+    overrides?: EmailOverrides;
   };
 };
 

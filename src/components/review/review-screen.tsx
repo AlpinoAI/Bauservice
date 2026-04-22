@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { UserPlus } from "lucide-react";
 import type {
   Campaign,
   Example,
@@ -9,8 +10,9 @@ import type {
   Service,
   WithScore,
 } from "@/lib/types";
-import { buildEmptyDraft, useCampaignStore } from "@/lib/campaign-store";
+import { useCampaignStore } from "@/lib/campaign-store";
 import type { RecipientDraft } from "@/lib/campaign-store";
+import { buildDraftForRecipient } from "@/lib/build-draft-for-recipient";
 import { Badge } from "@/components/ui/badge";
 import { RecipientTabs } from "./recipient-tabs";
 import { ServicePanel } from "./service-panel";
@@ -18,10 +20,8 @@ import { EmailPreview } from "./email-preview";
 import { ApprovalBar } from "./approval-bar";
 import { EditableTextBlock } from "./editable-text-block";
 import { ScenarioSelector } from "./scenario-selector";
-import { ItemRecipientsNote } from "./item-recipients-note";
+import { RecipientSwapSheet } from "./recipient-swap-sheet";
 import { servicesOrder, serviceLabels } from "@/lib/filter-options";
-
-const DEFAULT_N = 3;
 
 type RenderPayloadInput = {
   draft: RecipientDraft;
@@ -59,13 +59,13 @@ function buildRenderPayload({ draft, pool, scenarioId }: RenderPayloadInput) {
 
 export function ReviewScreen({ campaignId }: { campaignId: string }) {
   const campaign = useCampaignStore((s) => s.campaign);
-  const scenarioId = useCampaignStore((s) => s.scenarioId);
   const activeId = useCampaignStore((s) => s.activeRecipientId);
   const drafts = useCampaignStore((s) => s.drafts);
   const loading = useCampaignStore((s) => s.loading);
 
   const activeDraft = activeId ? drafts[activeId] : null;
   const loadedRef = useRef<string | null>(null);
+  const [swapOpen, setSwapOpen] = useState(false);
 
   useEffect(() => {
     if (loadedRef.current === campaignId) return;
@@ -79,16 +79,17 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
         const cRes = await fetch(`/api/dummy/sql/campaigns/${campaignId}`);
         if (!cRes.ok) return;
         const c = (await cRes.json()) as Campaign;
-        store.setCampaign(c);
 
-        const rRes = await fetch(`/api/dummy/sql/recipients?limit=100`);
+        const rRes = await fetch(`/api/dummy/sql/recipients?limit=500`);
         if (!rRes.ok) return;
         const rData = (await rRes.json()) as { items: Recipient[] };
         const recipients = rData.items.filter((r) =>
           c.recipientIds.includes(r.id)
         );
 
-        let pinnedExampleId: number | undefined;
+        store.setCampaign(c);
+
+        let pinnedItem: WithScore<Example> | undefined;
         if (c.origin === "item" && c.itemRef) {
           const piRes = await fetch(
             `/api/dummy/sql/items?service=${c.itemRef.service}&limit=100`
@@ -99,47 +100,23 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
               (x) => x.id === c.itemRef!.itemId
             );
             if (pinItem) {
-              pinnedExampleId = pinItem.id;
-              useCampaignStore.getState().addToPool(c.itemRef.service, [
-                { ...pinItem, score: 1, reason: "Ursprungs-Eintrag der Kampagne" },
-              ]);
+              pinnedItem = {
+                ...pinItem,
+                score: 1,
+                reason: "Ursprungs-Eintrag der Kampagne",
+              };
+              useCampaignStore.getState().addToPool(c.itemRef.service, [pinnedItem]);
             }
           }
         }
 
-        for (const rec of recipients) {
-          const matchingResults = await Promise.all(
-            servicesOrder.map(async (svc) => {
-              const res = await fetch("/api/dummy/matching/examples", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  recipientId: rec.id,
-                  service: svc,
-                  n: 5,
-                }),
-              });
-              if (!res.ok) return { svc, items: [] as WithScore<Example>[] };
-              const data = (await res.json()) as {
-                items: WithScore<Example>[];
-              };
-              return { svc, items: data.items };
-            })
-          );
-
-          const draft = buildEmptyDraft(rec);
-          const api = useCampaignStore.getState();
-          for (const { svc, items } of matchingResults) {
-            api.addToPool(svc, items);
-            let ids = items.slice(0, DEFAULT_N).map((it) => it.id);
-            if (
-              pinnedExampleId !== undefined &&
-              c.itemRef?.service === svc &&
-              !ids.includes(pinnedExampleId)
-            ) {
-              ids = [pinnedExampleId, ...ids.slice(0, DEFAULT_N - 1)];
-            }
-            draft.selectedExamples[svc] = ids;
+        const built = await Promise.all(
+          recipients.map((rec) => buildDraftForRecipient(rec, c.itemRef, pinnedItem))
+        );
+        const api = useCampaignStore.getState();
+        for (const { draft, matching } of built) {
+          for (const { service, items } of matching) {
+            api.addToPool(service, items);
           }
           api.addDraft(draft);
         }
@@ -157,9 +134,9 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
       en: activeDraft.serviceEnabled,
       ov: activeDraft.overrides,
       sp: activeDraft.sprache,
-      sc: scenarioId,
+      sc: activeDraft.scenarioId,
     });
-  }, [activeDraft, scenarioId]);
+  }, [activeDraft]);
 
   useEffect(() => {
     if (!renderKey) return;
@@ -171,7 +148,7 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
       const payload = buildRenderPayload({
         draft,
         pool: state.examplesByService,
-        scenarioId: state.scenarioId,
+        scenarioId: draft.scenarioId,
       });
       try {
         const res = await fetch("/api/dummy/render/mjml", {
@@ -238,7 +215,19 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
 
         <ScenarioSelector />
 
-        {campaign.origin === "item" && <ItemRecipientsNote total={list.length} />}
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <p className="text-xs text-zinc-500">
+            {list.length} Empfänger in dieser Kampagne. Du kannst weitere
+            Kontakte über die Suche hinzufügen oder per Matching finden.
+          </p>
+          <button
+            type="button"
+            onClick={() => setSwapOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-blue-500 hover:text-blue-700"
+          >
+            <UserPlus size={12} /> Empfänger suchen &amp; hinzufügen
+          </button>
+        </div>
 
         <RecipientTabs />
 
@@ -272,6 +261,12 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
       </div>
 
       <ApprovalBar />
+
+      <RecipientSwapSheet
+        open={swapOpen}
+        campaign={campaign}
+        onClose={() => setSwapOpen(false)}
+      />
     </div>
   );
 }

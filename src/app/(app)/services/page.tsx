@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { SearchFilterBar, type FilterSpec } from "@/components/search-filter-bar";
 import { StartCampaignButton } from "@/components/ui/start-campaign-button";
+import { ServiceDetailSheet } from "@/components/services/service-detail-sheet";
+import { KategorienBadges } from "@/components/services/kategorien-badges";
 import { Badge } from "@/components/ui/badge";
 import { useDebounced } from "@/lib/use-debounced";
 import { bezirke, serviceLabels, servicesOrder } from "@/lib/filter-options";
-import { scenarioFromService } from "@/lib/scenarios";
 import { useStartCampaign } from "@/lib/use-start-campaign";
 import { betragOf, formatCurrency } from "@/lib/format";
 import type {
@@ -27,6 +28,7 @@ export default function ServicesPage() {
   const [loading, setLoading] = useState(false);
   const { start, startingId } = useStartCampaign();
   const starting = typeof startingId === "number" ? startingId : null;
+  const [detailItem, setDetailItem] = useState<Example | null>(null);
   const debouncedQuery = useDebounced(query, 200);
 
   useEffect(() => {
@@ -71,7 +73,6 @@ export default function ServicesPage() {
       name: `${serviceLabels[service]} · ${it.datum ?? ""} · ID ${it.id}`,
       origin: "item",
       itemRef: { service, itemId: it.id },
-      scenarioId: scenarioFromService(service),
     });
   }
 
@@ -121,6 +122,7 @@ export default function ServicesPage() {
             loading={loading}
             starting={starting}
             onStart={startCampaign}
+            onDetail={setDetailItem}
           />
         )}
         {service === "ergebnisse" && (
@@ -129,6 +131,7 @@ export default function ServicesPage() {
             loading={loading}
             starting={starting}
             onStart={startCampaign}
+            onDetail={setDetailItem}
           />
         )}
         {service === "beschluesse" && (
@@ -137,6 +140,7 @@ export default function ServicesPage() {
             loading={loading}
             starting={starting}
             onStart={startCampaign}
+            onDetail={setDetailItem}
           />
         )}
         {service === "baukonzessionen" && (
@@ -145,9 +149,21 @@ export default function ServicesPage() {
             loading={loading}
             starting={starting}
             onStart={startCampaign}
+            onDetail={setDetailItem}
           />
         )}
       </div>
+
+      <ServiceDetailSheet
+        open={detailItem !== null}
+        item={detailItem}
+        onClose={() => setDetailItem(null)}
+        onStartCampaign={(it) => {
+          setDetailItem(null);
+          startCampaign(it);
+        }}
+        starting={starting !== null}
+      />
     </main>
   );
 }
@@ -157,6 +173,7 @@ type TableBaseProps<T> = {
   loading: boolean;
   starting: number | null;
   onStart: (it: T) => void;
+  onDetail: (it: T) => void;
 };
 
 function EmptyRow({ cols, text }: { cols: number; text: string }) {
@@ -174,6 +191,7 @@ function AusschreibungenTable({
   loading,
   starting,
   onStart,
+  onDetail,
 }: TableBaseProps<AusschreibungExample>) {
   const cols = 7;
   return (
@@ -220,13 +238,7 @@ function AusschreibungenTable({
                 <p className="line-clamp-3">{it.beschreibungDe}</p>
               </td>
               <td className="px-4 py-2.5">
-                <div className="flex flex-wrap gap-1">
-                  {(it.kategorien ?? (it.gewerk ? [it.gewerk] : [])).map((k) => (
-                    <Badge key={k} variant="neutral">
-                      {k}
-                    </Badge>
-                  ))}
-                </div>
+                <KategorienBadges kategorien={it.kategorien} gewerk={it.gewerk} />
               </td>
               <td className="px-4 py-2.5 text-right font-medium whitespace-nowrap">
                 {formatCurrency(it.betrag) ?? "—"}
@@ -239,11 +251,20 @@ function AusschreibungenTable({
                 )}
               </td>
               <td className="px-4 py-2.5 text-right">
-                <StartCampaignButton
-                  disabled={starting !== null}
-                  loading={starting === it.id}
-                  onClick={() => onStart(it)}
-                />
+                <div className="inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onDetail(it)}
+                    className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-blue-500 hover:text-blue-700"
+                  >
+                    Details
+                  </button>
+                  <StartCampaignButton
+                    disabled={starting !== null}
+                    loading={starting === it.id}
+                    onClick={() => onStart(it)}
+                  />
+                </div>
               </td>
             </tr>
           ))
@@ -258,17 +279,20 @@ function ErgebnisseTable({
   loading,
   starting,
   onStart,
+  onDetail,
 }: TableBaseProps<ErgebnisExample>) {
-  const cols = 6;
+  const cols = 8;
   return (
     <table className="w-full text-sm">
       <thead className="border-b border-zinc-100 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
         <tr>
-          <th className="px-4 py-2 text-left">Zuschlag an</th>
-          <th className="px-4 py-2 text-left">Ausschreibung</th>
+          <th className="px-4 py-2 text-left">Ausschreiber</th>
+          <th className="px-4 py-2 text-left">Nummer</th>
           <th className="px-4 py-2 text-left">Beschreibung</th>
-          <th className="px-4 py-2 text-right">Betrag</th>
-          <th className="px-4 py-2 text-right">Punkte / Rabatt</th>
+          <th className="px-4 py-2 text-left">Kategorien</th>
+          <th className="px-4 py-2 text-left">Ausgang (Zuschlag)</th>
+          <th className="px-4 py-2 text-right">Abgebot</th>
+          <th className="px-4 py-2 text-right">Punkte</th>
           <th className="px-4 py-2" />
         </tr>
       </thead>
@@ -280,21 +304,19 @@ function ErgebnisseTable({
         ) : (
           items.map((it) => (
             <tr key={it.id} className="align-top transition hover:bg-zinc-50">
-              <td className="px-4 py-2.5">
+              <td className="max-w-[200px] px-4 py-2.5">
                 <div className="font-medium text-zinc-900">
-                  {it.teilnehmerNameDe}
+                  {it.ausschreiberName ?? "—"}
                 </div>
-                {it.datum && (
-                  <div className="text-xs text-zinc-500">{it.datum}</div>
-                )}
-              </td>
-              <td className="px-4 py-2.5 whitespace-nowrap text-xs">
-                <div className="text-zinc-700">ID {it.ausschreibungId}</div>
                 {it.bezirk && (
-                  <div className="text-zinc-500">{it.bezirk}</div>
+                  <div className="text-xs text-zinc-500">{it.bezirk}</div>
                 )}
               </td>
-              <td className="max-w-[360px] px-4 py-2.5 text-zinc-800">
+              <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-700">
+                <div>{it.nummer ?? it.ausschreibungId}</div>
+                {it.datum && <div className="text-zinc-500">{it.datum}</div>}
+              </td>
+              <td className="max-w-[300px] px-4 py-2.5 text-zinc-800">
                 {it.gewerk && (
                   <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700">
                     {it.gewerk}
@@ -302,25 +324,51 @@ function ErgebnisseTable({
                 )}
                 <p className="line-clamp-3">{it.beschreibungDe}</p>
               </td>
-              <td className="px-4 py-2.5 text-right font-medium whitespace-nowrap">
-                {formatCurrency(it.betrag) ?? "—"}
+              <td className="px-4 py-2.5">
+                <KategorienBadges kategorien={it.kategorien} gewerk={it.gewerk} />
               </td>
-              <td className="px-4 py-2.5 text-right text-xs whitespace-nowrap">
-                {it.punkteBewertung != null && (
-                  <div className="font-medium text-zinc-700">
-                    {it.punkteBewertung} / 100
+              <td className="px-4 py-2.5">
+                <div className="font-medium text-zinc-900">
+                  {it.teilnehmerNameDe}
+                </div>
+                {it.betrag != null && (
+                  <div className="text-xs text-zinc-500">
+                    {formatCurrency(it.betrag)}
                   </div>
                 )}
+              </td>
+              <td className="px-4 py-2.5 text-right text-xs whitespace-nowrap">
                 {it.prozent != null && (
-                  <div className="text-zinc-500">−{it.prozent}%</div>
+                  <div className="font-medium text-zinc-700">
+                    {it.prozent.toLocaleString("de-DE")}%
+                  </div>
+                )}
+                {it.ausschreibungBetrag != null && (
+                  <div className="text-zinc-500">
+                    aus {formatCurrency(it.ausschreibungBetrag)}
+                  </div>
                 )}
               </td>
+              <td className="px-4 py-2.5 text-right text-xs whitespace-nowrap">
+                {it.punkteBewertung != null
+                  ? `${it.punkteBewertung} / 100`
+                  : "—"}
+              </td>
               <td className="px-4 py-2.5 text-right">
-                <StartCampaignButton
-                  disabled={starting !== null}
-                  loading={starting === it.id}
-                  onClick={() => onStart(it)}
-                />
+                <div className="inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onDetail(it)}
+                    className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-blue-500 hover:text-blue-700"
+                  >
+                    Details
+                  </button>
+                  <StartCampaignButton
+                    disabled={starting !== null}
+                    loading={starting === it.id}
+                    onClick={() => onStart(it)}
+                  />
+                </div>
               </td>
             </tr>
           ))
@@ -335,8 +383,9 @@ function BeschluesseTable({
   loading,
   starting,
   onStart,
+  onDetail,
 }: TableBaseProps<BeschlussExample>) {
-  const cols = 7;
+  const cols = 8;
   return (
     <table className="w-full text-sm">
       <thead className="border-b border-zinc-100 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
@@ -345,6 +394,7 @@ function BeschluesseTable({
           <th className="px-4 py-2 text-left">Datum</th>
           <th className="px-4 py-2 text-left">Bezirk</th>
           <th className="px-4 py-2 text-left">Beschreibung</th>
+          <th className="px-4 py-2 text-left">Kategorien</th>
           <th className="px-4 py-2 text-right">Betrag (geschätzt)</th>
           <th className="px-4 py-2 text-left">Status</th>
           <th className="px-4 py-2" />
@@ -371,13 +421,16 @@ function BeschluesseTable({
                   "—"
                 )}
               </td>
-              <td className="max-w-[360px] px-4 py-2.5 text-zinc-800">
+              <td className="max-w-[300px] px-4 py-2.5 text-zinc-800">
                 {it.gewerk && (
                   <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700">
                     {it.gewerk}
                   </div>
                 )}
                 <p className="line-clamp-3">{it.beschreibungDe}</p>
+              </td>
+              <td className="px-4 py-2.5">
+                <KategorienBadges kategorien={it.kategorien} gewerk={it.gewerk} />
               </td>
               <td className="px-4 py-2.5 text-right font-medium whitespace-nowrap">
                 {formatCurrency(it.geschaetzterBetrag) ?? "—"}
@@ -386,11 +439,20 @@ function BeschluesseTable({
                 {it.status && <Badge variant="amber">{it.status}</Badge>}
               </td>
               <td className="px-4 py-2.5 text-right">
-                <StartCampaignButton
-                  disabled={starting !== null}
-                  loading={starting === it.id}
-                  onClick={() => onStart(it)}
-                />
+                <div className="inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onDetail(it)}
+                    className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-blue-500 hover:text-blue-700"
+                  >
+                    Details
+                  </button>
+                  <StartCampaignButton
+                    disabled={starting !== null}
+                    loading={starting === it.id}
+                    onClick={() => onStart(it)}
+                  />
+                </div>
               </td>
             </tr>
           ))
@@ -405,8 +467,9 @@ function KonzessionenTable({
   loading,
   starting,
   onStart,
+  onDetail,
 }: TableBaseProps<KonzessionExample>) {
-  const cols = 6;
+  const cols = 7;
   return (
     <table className="w-full text-sm">
       <thead className="border-b border-zinc-100 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
@@ -414,6 +477,7 @@ function KonzessionenTable({
           <th className="px-4 py-2 text-left">Gemeinde</th>
           <th className="px-4 py-2 text-left">Typ</th>
           <th className="px-4 py-2 text-left">Bauvorhaben</th>
+          <th className="px-4 py-2 text-left">Kategorien</th>
           <th className="px-4 py-2 text-left">Adresse</th>
           <th className="px-4 py-2 text-left">Datum</th>
           <th className="px-4 py-2" />
@@ -440,11 +504,14 @@ function KonzessionenTable({
                   <Badge variant="blue">{it.konzessionenTyp}</Badge>
                 )}
               </td>
-              <td className="max-w-[360px] px-4 py-2.5 text-zinc-800">
+              <td className="max-w-[280px] px-4 py-2.5 text-zinc-800">
                 {it.name && (
                   <div className="font-medium text-zinc-900">{it.name}</div>
                 )}
                 <p className="line-clamp-2 text-zinc-700">{it.beschreibungDe}</p>
+              </td>
+              <td className="px-4 py-2.5">
+                <KategorienBadges kategorien={it.kategorien} gewerk={it.gewerk} />
               </td>
               <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-700">
                 {it.adresse ?? "—"}
@@ -456,11 +523,20 @@ function KonzessionenTable({
                 {it.datum ?? "—"}
               </td>
               <td className="px-4 py-2.5 text-right">
-                <StartCampaignButton
-                  disabled={starting !== null}
-                  loading={starting === it.id}
-                  onClick={() => onStart(it)}
-                />
+                <div className="inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onDetail(it)}
+                    className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-blue-500 hover:text-blue-700"
+                  >
+                    Details
+                  </button>
+                  <StartCampaignButton
+                    disabled={starting !== null}
+                    loading={starting === it.id}
+                    onClick={() => onStart(it)}
+                  />
+                </div>
               </td>
             </tr>
           ))

@@ -6,24 +6,25 @@ import type { ScenarioId } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function ScenarioSelector() {
-  const scenarioId = useCampaignStore((s) => s.scenarioId);
-  const setScenario = useCampaignStore((s) => s.setScenario);
-  const activeId = useCampaignStore((s) => s.activeRecipientId);
-  const drafts = useCampaignStore((s) => s.drafts);
-  const active = activeId ? drafts[activeId] : null;
+  const active = useCampaignStore((s) =>
+    s.activeRecipientId ? s.drafts[s.activeRecipientId] : null
+  );
+  const setDraftScenario = useCampaignStore((s) => s.setDraftScenario);
 
-  const sprache = active?.sprache ?? "de";
-  const current = scenarios[scenarioId];
+  if (!active) return null;
+
+  const sprache = active.sprache;
+  const current = scenarios[active.scenarioId];
 
   return (
     <section className="mt-4 rounded-lg border border-zinc-200 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold">Email-Template wählen</h3>
+          <h3 className="text-sm font-semibold">Kundentyp-Template</h3>
           <p className="mt-1 text-xs text-zinc-500">
-            Jedes Szenario hat einen eigenen Aufbau, Betreff und Text in DE und
-            IT. Text-Anpassungen pro Empfänger folgen unten oder direkt in der
-            Vorschau.
+            System schlägt automatisch den passenden Kundentyp vor (basiert auf
+            Bestand/Gewinner/Teilnehmer-Signalen). Du kannst jederzeit
+            überschreiben — pro Empfänger.
           </p>
         </div>
         <span className="rounded-md bg-zinc-100 px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-zinc-600">
@@ -34,14 +35,14 @@ export function ScenarioSelector() {
       <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {scenariosOrder.map((id) => {
           const s = scenarios[id];
-          const isActive = scenarioId === id;
+          const isActive = active.scenarioId === id;
           const label = sprache === "it" ? s.labelIt : s.labelDe;
           const desc = sprache === "it" ? s.descriptionIt : s.descriptionDe;
           return (
             <button
               key={id}
               type="button"
-              onClick={() => setScenario(id as ScenarioId)}
+              onClick={() => setDraftScenario(active.recipientId, id as ScenarioId)}
               aria-pressed={isActive}
               className={cn(
                 "group flex flex-col items-start gap-1 rounded-md border px-3 py-2.5 text-left text-xs transition",
@@ -60,7 +61,9 @@ export function ScenarioSelector() {
       </div>
 
       <div className="mt-3 rounded-md border border-dashed border-zinc-200 bg-zinc-50 px-3 py-2 text-[11px] text-zinc-600">
-        Aktiv: <strong>{sprache === "it" ? current.labelIt : current.labelDe}</strong>
+        Aktiv für <strong>{active.recipient.sprache === "it" ? active.recipient.nameIt : active.recipient.nameDe}</strong>:
+        {" "}
+        <strong>{sprache === "it" ? current.labelIt : current.labelDe}</strong>
         {" · "}Template-Varianten: <strong>DE</strong> + <strong>IT</strong>
       </div>
     </section>

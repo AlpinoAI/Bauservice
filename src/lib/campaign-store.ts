@@ -1,9 +1,9 @@
 "use client";
 
 import { create } from "zustand";
-import { scenarioFromService } from "@/lib/scenarios";
 import type {
   Campaign,
+  EmailOverrides,
   Example,
   Recipient,
   ScenarioId,
@@ -18,16 +18,16 @@ export type RecipientDraft = {
   recipientId: number;
   recipient: Recipient;
   sprache: Sprache;
+  scenarioId: ScenarioId;
   selectedExamples: Record<Service, number[]>;
   serviceEnabled: Record<Service, boolean>;
-  overrides: { salutation?: string; intro?: string; cta?: string };
+  overrides: EmailOverrides;
   skip: boolean;
 };
 
 type CampaignState = {
   campaignId: string | null;
   campaign: Campaign | null;
-  scenarioId: ScenarioId;
   drafts: Record<number, RecipientDraft>;
   examplesByService: Record<Service, PoolExample[]>;
   activeRecipientId: number | null;
@@ -38,7 +38,7 @@ type CampaignState = {
 
 type CampaignActions = {
   setCampaign: (c: Campaign) => void;
-  setScenario: (id: ScenarioId) => void;
+  setDraftScenario: (recipientId: number, id: ScenarioId) => void;
   setLoading: (loading: boolean) => void;
   addDraft: (draft: RecipientDraft) => void;
   setActiveRecipient: (id: number) => void;
@@ -58,10 +58,10 @@ type CampaignActions = {
     service: Service,
     exampleId: number
   ) => void;
-  setOverride: (
+  setOverride: <K extends keyof EmailOverrides>(
     recipientId: number,
-    key: "salutation" | "intro" | "cta",
-    value: string
+    key: K,
+    value: EmailOverrides[K]
   ) => void;
   toggleSkip: (recipientId: number) => void;
   addToPool: (service: Service, examples: PoolExample[]) => void;
@@ -86,7 +86,6 @@ const emptyEnabled = (): Record<Service, boolean> => ({
 const initialState: CampaignState = {
   campaignId: null,
   campaign: null,
-  scenarioId: "A",
   drafts: {},
   examplesByService: emptyByService<PoolExample>(),
   activeRecipientId: null,
@@ -99,20 +98,18 @@ export const useCampaignStore = create<CampaignState & CampaignActions>(
   (set) => ({
     ...initialState,
 
-    setCampaign: (c) => {
-      const scenarioId =
-        c.scenarioId ??
-        (c.origin === "item" && c.itemRef
-          ? scenarioFromService(c.itemRef.service)
-          : "A");
-      set({ campaignId: c.id, campaign: c, scenarioId });
-    },
-    setScenario: (id) =>
-      set((s) =>
-        s.scenarioId === id
-          ? s
-          : { scenarioId: id, renderCache: {}, isDirty: true }
-      ),
+    setCampaign: (c) => set({ campaignId: c.id, campaign: c }),
+    setDraftScenario: (rid, id) =>
+      set((s) => {
+        const d = s.drafts[rid];
+        if (!d || d.scenarioId === id) return s;
+        const { [rid]: _removed, ...rest } = s.renderCache;
+        return {
+          drafts: { ...s.drafts, [rid]: { ...d, scenarioId: id } },
+          renderCache: rest,
+          isDirty: true,
+        };
+      }),
     setLoading: (loading) => set({ loading }),
 
     addDraft: (draft) =>
@@ -200,8 +197,12 @@ export const useCampaignStore = create<CampaignState & CampaignActions>(
       set((s) => {
         const d = s.drafts[rid];
         if (!d) return s;
-        const next = { ...d.overrides, [key]: value };
-        if (!value) delete next[key];
+        const next: EmailOverrides = { ...d.overrides };
+        if (value === undefined || value === "") {
+          delete next[key];
+        } else {
+          next[key] = value;
+        }
         return {
           drafts: { ...s.drafts, [rid]: { ...d, overrides: next } },
           isDirty: true,
@@ -238,11 +239,15 @@ export const useCampaignStore = create<CampaignState & CampaignActions>(
   })
 );
 
-export function buildEmptyDraft(recipient: Recipient): RecipientDraft {
+export function buildEmptyDraft(
+  recipient: Recipient,
+  scenarioId: ScenarioId = "D"
+): RecipientDraft {
   return {
     recipientId: recipient.id,
     recipient,
     sprache: recipient.sprache,
+    scenarioId,
     selectedExamples: emptyByService<number>(),
     serviceEnabled: emptyEnabled(),
     overrides: {},

@@ -1,29 +1,65 @@
 import { NextResponse } from "next/server";
-import { itemsForService } from "@/lib/fixtures/items";
-import { scenarios, scenariosOrder } from "@/lib/scenarios";
+import {
+  classifyRecipientForCampaign,
+  matchExamplesForRecipient,
+} from "@/lib/fixtures/matching";
+import { visibleRecipients } from "@/lib/fixtures/recipients";
+import type { Service } from "@/lib/types";
 import type { Suggestion } from "@/lib/suggestions";
 
-const FRESHNESS_DAYS = 14;
+const services: Service[] = [
+  "ausschreibungen",
+  "ergebnisse",
+  "beschluesse",
+  "baukonzessionen",
+];
 
-export async function GET() {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - FRESHNESS_DAYS);
-  const cutoffIso = cutoff.toISOString().slice(0, 10);
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const limitRaw = Number(url.searchParams.get("limit") ?? "6");
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 6;
+  const minScoreRaw = Number(url.searchParams.get("minScore") ?? "0.7");
+  const minScore = Number.isFinite(minScoreRaw) ? minScoreRaw : 0.7;
 
-  const suggestions: Suggestion[] = scenariosOrder.map((id) => {
-    const meta = scenarios[id];
-    const items = itemsForService(meta.service)
-      .slice()
-      .sort((a, b) => (b.datum ?? "").localeCompare(a.datum ?? ""));
-    const fresh = items.filter((it) => (it.datum ?? "") >= cutoffIso);
-    return {
-      scenarioId: id,
-      service: meta.service,
-      newItems: fresh.length,
-      latestItem: fresh[0] ?? items[0] ?? null,
-      since: cutoffIso,
-    };
+  const suggestions: Suggestion[] = [];
+
+  for (const r of visibleRecipients()) {
+    if (!r.rollen.anbieter) continue;
+    let best: { item: Suggestion["item"]; score: number; reason: string } | null = null;
+    for (const svc of services) {
+      const matches = matchExamplesForRecipient(r.id, svc, 3);
+      for (const m of matches) {
+        if (!best || m.score > best.score) {
+          best = { item: m, score: m.score, reason: m.reason ?? "" };
+        }
+      }
+    }
+    if (!best || best.score < minScore) continue;
+    const itemRef =
+      best.item.service === "ausschreibungen" || best.item.service === "ergebnisse"
+        ? { service: best.item.service as Service, itemId: best.item.id }
+        : undefined;
+    const scenarioId = classifyRecipientForCampaign(r, itemRef);
+    suggestions.push({
+      id: `${r.id}-${best.item.service}-${best.item.id}`,
+      recipient: {
+        id: r.id,
+        nameDe: r.nameDe,
+        nameIt: r.nameIt,
+        sprache: r.sprache,
+        bezirkDe: r.bezirkDe,
+        gewerke: r.gewerke,
+      },
+      item: best.item,
+      score: best.score,
+      reason: best.reason,
+      scenarioId,
+    });
+  }
+
+  suggestions.sort((a, b) => b.score - a.score);
+  return NextResponse.json({
+    suggestions: suggestions.slice(0, limit),
+    total: suggestions.length,
   });
-
-  return NextResponse.json({ suggestions, since: cutoffIso });
 }

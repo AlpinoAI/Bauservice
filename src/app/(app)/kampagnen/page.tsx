@@ -45,30 +45,22 @@ export default function KampagnenPage() {
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <Link
               href="/kampagnen/neu-aus-item"
-              className="group flex items-start gap-3 rounded-lg border-2 border-blue-600 bg-blue-600 p-4 text-white transition hover:bg-blue-700"
+              className="group flex items-start gap-3 rounded-lg border border-zinc-200 bg-white p-4 transition hover:border-blue-500 hover:shadow-sm"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-white/15">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-600 group-hover:bg-blue-50 group-hover:text-blue-600">
                 <Building2 size={20} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-white/80">
-                    Empfohlen
-                  </span>
-                  <Badge variant="amber" className="bg-amber-400 text-amber-900">
-                    Szenario wählbar
-                  </Badge>
-                </div>
-                <div className="mt-1 flex items-center gap-2 font-semibold">
+                <div className="flex items-center gap-2 font-semibold text-zinc-900">
                   Aus Services
                   <ArrowRight
                     size={14}
-                    className="transition group-hover:translate-x-0.5"
+                    className="text-zinc-400 transition group-hover:translate-x-0.5 group-hover:text-blue-600"
                   />
                 </div>
-                <p className="mt-0.5 text-xs text-white/85">
-                  Ausschreibung, Ergebnis, Beschluss oder Baukonzession
-                  auswählen. Empfänger kommen automatisch aus dem Matching.
+                <p className="mt-0.5 text-xs text-zinc-600">
+                  Eine Ausschreibung, ein Ergebnis, einen Beschluss oder eine
+                  Konzession als Ausgangspunkt wählen.
                 </p>
               </div>
             </Link>
@@ -76,16 +68,11 @@ export default function KampagnenPage() {
               href="/kampagnen/neu-aus-kontakt"
               className="group flex items-start gap-3 rounded-lg border border-zinc-200 bg-white p-4 transition hover:border-blue-500 hover:shadow-sm"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-600">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-600 group-hover:bg-blue-50 group-hover:text-blue-600">
                 <Users size={20} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                    Gezielt
-                  </span>
-                </div>
-                <div className="mt-1 flex items-center gap-2 font-semibold text-zinc-900">
+                <div className="flex items-center gap-2 font-semibold text-zinc-900">
                   Aus Kontakt
                   <ArrowRight
                     size={14}
@@ -93,8 +80,8 @@ export default function KampagnenPage() {
                   />
                 </div>
                 <p className="mt-0.5 text-xs text-zinc-600">
-                  Einzelne Empfänger im Stamm suchen und zusammenstellen. Nur
-                  sinnvoll bei gezielter Ansprache weniger Firmen.
+                  Einen oder mehrere Empfänger im Stamm auswählen. System
+                  schlägt passende Beispiele vor.
                 </p>
               </div>
             </Link>

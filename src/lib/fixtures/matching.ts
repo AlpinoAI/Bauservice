@@ -1,4 +1,4 @@
-import type { Example, Recipient, Service, WithScore } from "@/lib/types";
+import type { Example, Recipient, ScenarioId, Service, WithScore } from "@/lib/types";
 import {
   ausschreibungenFixture,
   beschluesseFixture,
@@ -8,6 +8,7 @@ import {
 } from "@/lib/fixtures/items";
 import { recipientsFixture, visibleRecipients } from "@/lib/fixtures/recipients";
 import { bezirkItToDe, type Gewerk } from "@/lib/filter-options";
+import { classifyRecipient } from "@/lib/scenarios";
 
 // Fallback-Heuristik für Kontakte ohne `gewerke` — matcht Firmennamen (deutsch + italienisch)
 // auf den Gewerk-Katalog aus filter-options.ts. Wird nur herangezogen, wenn der Datensatz
@@ -90,6 +91,60 @@ export function matchExamplesForRecipient(
   });
 
   return scored.sort((a, b) => b.score - a.score).slice(0, n);
+}
+
+/**
+ * Bestimmt den Kundentyp eines Kontakts im Kontext einer Kampagne.
+ * - "B" (Gewinner): Kontakt ist gewinner_id einer Ausschreibung im Kontext (oder hat irgendwo gewonnen, bei origin=recipient).
+ * - "C" (Teilnehmer): Kontakt war Teilnehmer einer Ausschreibung.
+ * - "A" (Bestand): rollen.kunde = true.
+ * - "D" (Kalt): keins davon.
+ *
+ * Bei origin=item wird vorrangig auf das konkrete Item geprüft; bei origin=recipient
+ * auf Historie global.
+ */
+export function classifyRecipientForCampaign(
+  recipient: Recipient,
+  context?: { service: Service; itemId: number }
+): ScenarioId {
+  let isGewinner = false;
+  let isTeilnehmer = false;
+
+  if (context) {
+    if (context.service === "ausschreibungen") {
+      const item = ausschreibungenFixture.find((a) => a.id === context.itemId);
+      if (item?.gewinnerId === recipient.id) isGewinner = true;
+      if (
+        ergebnisseFixture.some(
+          (e) =>
+            e.ausschreibungId === context.itemId &&
+            e.teilnehmerId === recipient.id
+        )
+      ) {
+        isTeilnehmer = true;
+      }
+    } else if (context.service === "ergebnisse") {
+      const result = ergebnisseFixture.find((e) => e.id === context.itemId);
+      if (result) {
+        const parent = ausschreibungenFixture.find(
+          (a) => a.id === result.ausschreibungId
+        );
+        if (parent?.gewinnerId === recipient.id) isGewinner = true;
+        if (result.teilnehmerId === recipient.id) isTeilnehmer = true;
+      }
+    }
+  } else {
+    isGewinner = ausschreibungenFixture.some((a) => a.gewinnerId === recipient.id);
+    isTeilnehmer = ergebnisseFixture.some(
+      (e) => e.teilnehmerId === recipient.id
+    );
+  }
+
+  return classifyRecipient({
+    isGewinner,
+    isTeilnehmer,
+    isKunde: recipient.rollen.kunde,
+  });
 }
 
 export function matchRecipientsForItem(
