@@ -151,3 +151,86 @@ Temporäre Lösung im Frontend: `src/lib/fixtures/matching.ts` hält jetzt `bezi
 5. **`hatHistorie`**-Definition: Reicht "Teilnehmer bei ≥ 1 Ausschreibung"? Oder soll auch "Gewinner bei ≥ 1" / "als Projektant/Bauleiter/… in Projektierungen geführt" zählen?
 6. **Audit-Felder**: Endpoint sollte optional `last_updated`, `source_ts` mitliefern, damit das Frontend im UI klar macht, wie alt ein Datensatz ist.
 7. **Ausschreiber-/Vergabestellen-Auflösung**: Gibt es im Produktivsystem eine dedizierte Vergabestellen-Tabelle, auf die `Ausschreiber_id` zeigt? Dann bitte mitspiegeln oder im Endpoint als `ausschreiberName` serialisieren. Ohne diese Auflösung bleibt die "Ausschreiber"-Spalte im Services-UI für die Mehrheit der Einträge leer.
+
+## 7 FK-Auflösungs-Matrix (Stichprobe N≈500 Rows je Spalte)
+
+Stichprobe: je ein ID-Range-Fenster (indexnutzend). `n_set` = Werte `IS NOT NULL AND > 0`. `n_res` = davon auflösend im Ziel-Table. Quote = `n_res / n_set`.
+
+| Quelle → Ziel | n_set | n_res | **Quote** | Verdict |
+|---|---:|---:|---:|---|
+| `Ausschreibungen.Ausschreiber_id` → `Kontakte.id` | 487 | 4 | **0,8 %** | ⛔ Dead FK — Vergabestellen in separatem Namensraum |
+| `Ausschreibungen.Vergabestelle_id` → `Kontakte.id` | 31 | 0 | **0 %** | ⛔ Dead + meist leer |
+| `Ausschreibungen.gewinner_id` → `Kontakte.id` | 745 | 650 | **87 %** | ✅ Nutzbar |
+| `Ausschreibungen.Projektant_id` → `Kontakte.id` | 398 | 304 | **76 %** | ✅ Nutzbar |
+| `Ausschreibungen.HSLPlaner` → `Kontakte.id` | 3 | 2 | 67 % | 🟡 Fast immer leer (3/486) |
+| `Ausschreibungen.ElektroPlaner` → `Kontakte.id` | 0 | 0 | — | 🟡 Durchweg leer in Stichprobe |
+| `Ausschreibungen.Projektsteuerer` → `Kontakte.id` | 0 | 0 | — | 🟡 Durchweg leer |
+| `Ausschreibungen.Bauleiter` → `Kontakte.id` | 13 | 12 | 92 % | 🟡 Fast immer leer (13/491) |
+| `Ausschreibungen.projektierung` → `Projektierungen.ProjektierungenId` | 262 | 261 | **99,6 %** | ✅ Saubere Eltern-Referenz |
+| `Ausschreibungen_Teilnehmer.TeilnehmerID` → `Kontakte.id` | 3188 | 2916 | **91 %** | ✅ Sehr gut |
+| `Ausschreibungen_Hauptarbeiten.Unterkategorie` → `Oberkat_Unterkat.UnterkategorieID` | 482 | 482 | **100 %** | ✅ Perfekt — Quelle für Gewerk |
+| `Projektierungen.Ausschreiber` → `Kontakte.id` | 495 | 6 | **1,2 %** | ⛔ Dead FK (gleiches Muster wie Ausschreibungen) |
+| `Projektierungen.Vergabestelle` → `Kontakte.id` | 21 | 0 | **0 %** | ⛔ Dead + meist leer |
+| `Projektierungen.Projektant` → `Kontakte.id` | 644 | 430 | **67 %** | ✅ Nutzbar |
+| `Projektierungen.Bauleiter` → `Kontakte.id` | 6 | 4 | 67 % | 🟡 Meist leer |
+| `Projektierungen.HSLPlaner` → `Kontakte.id` | 6 | 6 | 100 % | 🟡 Meist leer |
+| `Projektierungen.ElektroPlaner` → `Kontakte.id` | 7 | 6 | 86 % | 🟡 Meist leer |
+| `Projektierungen.Vorgaenger` → `Projektierungen.ProjektierungenId` | 267 | 267 | **100 %** | ✅ Saubere Self-Referenz |
+| `Projektierungen_Unterkategorie.Unterkategorie` → `Oberkat` | 816 | 816 | **100 %** | ✅ Perfekt |
+| `Konzessionen.Projektant` → `Kontakte.id` | 0 | 0 | — | 🟡 Durchweg leer in Stichprobe |
+| `Konzessionen_Unterkategorie.Unterkategorie` → `Oberkat` | 501 | 501 | **100 %** | ✅ Perfekt |
+
+**Was das fürs UI bedeutet:**
+- **Grün = direkt nutzbar**: `gewinner_id`, `Projektant_id` (beide Ausschreibungen + Projektierungen), `TeilnehmerID`, alle Unterkategorie-Joins, `projektierung` (Ausschreibung→Parent-Projekt), `Vorgaenger`. Wir können im UI Personen- und Firmen-Namen für Gewinner, Projektant und Teilnehmer anzeigen, sowie den Themenbaum (Gewerk/Kategorien) herleiten.
+- **Rot = nur mit Endpoint-Support**: Ausschreiber/Vergabestelle der öffentlichen Hand. Selbst wenn wir die Join-Logik perfekt schreiben, bleibt die Namens-Spalte 99 % leer, bis Matthias die Vergabestellen-Tabelle mitspiegelt.
+- **Gelb = Matching-Signale nur mit geringer Abdeckung**: HSL-/ElektroPlaner, Bauleiter, Projektsteuerer sind meist NULL. Taugt nicht als Matching-Dimension ("Anbieter X war oft mit Bauleiter Y unterwegs"), ohne dass wir die Dichte deutlich erhöhen.
+
+## 8 Rückwärts-Joins auf `Kontakte.id` — wer kennt wen
+
+Basis: 11 388 distinkte `Kontakte.id` (deduped), 23 322 Rows mit Duplikaten.
+
+| Ziel-Feld | Distinct Kontakte referenziert | Gesamt-Rows | Was das Signal erzählt |
+|---|---:|---:|---|
+| `Ausschreibungen_Teilnehmer.TeilnehmerID` | 14 020 | 378 064 | **Aktivitätsgraph**: der wichtigste Kontakt-Signal-Feed. 33 Teilnahmen pro Kontakt im Schnitt. Direktes `hatHistorie`-Signal + "Anzahl Teilnahmen" als Seniority-Proxy. Hinweis: 14 020 > 11 388 → einige TeilnehmerIDs liegen ausserhalb `Kontakte` (wie bei FK10 gemessen, ~9 % Nicht-Auflösung). |
+| `Ausschreibungen.gewinner_id` | 9 842 | 62 133 | **Gewinnerquote**: welche Kontakte erfolgreich waren. 6,3 Zuschläge pro Gewinner im Schnitt. Score-Feature "Gewinner bei X Aufträgen" und "Gewinnerquote" (Teilnehmer vs. Gewinner) direkt ableitbar. |
+| `Ausschreibungen.Projektant_id` | 3 898 | 29 798 | **Planer-Netzwerk**: welche Kontakte projektieren (Architekten, Geometer, Ingenieure). 7,6 Mandate pro Projektant. Relevant um "Projektanten im Umkreis" zu matchen und Briefe gezielt an das Planungsumfeld zu schicken. |
+| `Projektierungen.Projektant` | 6 923 | 83 438 | **Breiterer Planer-Pool** (Projektierungen erfassen Planungsphasen, nicht nur Vergaben). 12 Projektierungen pro Projektant. Stärkstes Signal für "wer plant gerade was". |
+
+**Folgerungen für Matching-Signal-Katalog:**
+1. **`teilnahmen_total`** (pro Kontakt, aus `Teilnehmer.TeilnehmerID`): primärer Seniority/Aktivitäts-Proxy. Sollten wir als Score-Feature mitnehmen.
+2. **`gewinne_total` + `gewinnquote`** (aus `gewinner_id`): Qualitätssignal. Kontakte mit hoher Quote → starke Performer.
+3. **`projektmandate_total`** (aus `Projektant_id` in Ausschreibungen + Projektierungen): identifiziert Planer. Spannend für das "Projektant → Baufirma"-Cross-Selling-Narrativ.
+4. **`bezirke_aktiv`** (aus Bezirk-Werten der Teilnehmer-Einträge): räumlicher Aktionsradius pro Kontakt. Stärker als das statische `inBezirk_d` auf Kontakte-Ebene.
+
+## 9 `VectorDB_Kontakte` — Felder, die wir bisher nicht nutzen
+
+Basis: 22 232 aktive Kontakte ohne Werbe-Opt-out (aktuelle Hartfilter).
+
+| Feld | Typ | Füllquote | Heute verwendet? | Was damit im UI möglich wäre |
+|---|---|---:|---|---|
+| `Geschlecht` | `varchar(50)` | 75 % | Nein | Präzise Anrede in MJML ("Sehr geehrter Herr / Frau …") statt Kontakt-Fullname als Anrede. |
+| `Anrede_i` | `varchar(50)` | 38 % | Nein | Höflichkeits-Titel ("Arch.", "Geom.", "Ing."); fügt sich an Vorname/Nachname. |
+| `Vorname` / `Nachname` | `varchar(50)` | 75 % | Nein | Personalisierte Anrede + Sortier-/Suchschlüssel in Kontaktliste. Kontakt-Fullname bleibt als Fallback. |
+| `Anschrift_D` / `Anschrift_i` + `Postleitzahl` + `inGemeinde_d` | Text | 99,7 % | Nein | Kompletter Postbrief-Export (Serienbrief), Detail-Pane in Kontakt-Sicht, Gemeinde-Filter feiner als Bezirk. |
+| `PEC` | `varchar(250)` | 43 % | als `pec?` | **Schon dabei** — für offizielle italienische Kommunikation. Ordentliche Coverage; als Opt-in für rechtsverbindliche Mails. |
+| `Handynummer` | `varchar(20)` | 33 % | Nein | Zukünftige SMS-/WhatsApp-Kanäle, Kontakt-Detailseite. |
+| `Telefonnummer` | `varchar(20)` | 94 % | Nein | Kontakt-Detailseite, CSV-Export. |
+| `Webseite` | `varchar(100)` | 44 % | Nein | Quick-Link in Kontaktliste (Website-Check vor Versand), Firmenprofil-Badge. |
+| `Steuernummer` / `MwstNummer` | `varchar(20)` | 52 % | Nein | Relevant wenn wir Richtung "Anmelde-/Angebots-Templates" oder Compliance-Export gehen. Für Werbe-Mails (Phase 1) irrelevant. |
+| `Unterkategorie_wird_zusammengeführt` | `varchar(255)` | 100 % | Nein (Heuristik aus Name) | **Sofortiger Win**: ersetzt unsere Firmen-Namen-Heuristik in `matching.ts`. Text enthält IT-Oberkategorien (`Opere da elettricista`, `Opere infrastrutturali` …); einfacher Split + IT→DE-Map liefert saubere Gewerk-Arrays pro Kontakt. |
+| `inBezirk_i` | `varchar(50)` | 99,9 % | Nein (wir nehmen `inBezirk_d`) | Nur relevant falls italienische Sortierung/Anzeige benötigt wird. |
+| `inProvinz_i` | `varchar(50)` | 99,9 % | als `provinz?` | **Schon dabei**. |
+
+**Ranked "worth adding" (nach ROI für Phase-1.6-UI):**
+
+1. **`Unterkategorie_wird_zusammengeführt` → `gewerke: string[]`** auf `Recipient`. Ersetzt die Namens-Heuristik, macht Matching deterministisch. Aufwand klein, Effekt gross.
+2. **`Vorname`/`Nachname`/`Geschlecht`/`Anrede_i` → strukturierte Anrede**. Mail-Preview wird merklich persönlicher. Anrede-Text im Template: "Sehr geehrte Frau Arch. Piccolruaz" statt "Hallo Arch. Piccolruaz Sigrid".
+3. **`inGemeinde_d` + `Anschrift_D` + `Postleitzahl`** → feinere Filter (Gemeinde statt nur Bezirk) + Kontakt-Detailseite.
+4. **`Webseite`** → Quick-Link in Kontaktliste.
+5. **`Telefonnummer`/`Handynummer`** → Kontakt-Detailseite, kein UI-Blocker.
+6. **`Steuernummer`/`MwstNummer`** → erst wenn Compliance-/Angebots-Export kommt, nicht für Phase 1.
+
+**Was NICHT zu holen ist:**
+- Firmen-Beschreibungstext ("was macht diese Firma") — gibt's in der DB nicht.
+- Aktivitäts-Zeitreihen ("letzte Teilnahme") — müsste aus `Teilnehmer`+`Datum`-Joins berechnet werden, aber möglich (siehe § 8).
+- Kontakt-zu-Kontakt-Beziehungen ("Firma X ist Projektant für Firma Y") — nur indirekt aus Ausschreibungen ableitbar.
