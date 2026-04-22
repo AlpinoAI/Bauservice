@@ -18,6 +18,7 @@ export async function GET(req: Request) {
   const service = url.searchParams.get("service");
   const q = url.searchParams.get("q")?.trim().toLowerCase() ?? "";
   const bezirk = url.searchParams.get("bezirk")?.trim();
+  const gewerk = url.searchParams.get("gewerk")?.trim();
   const limitRaw = Number(url.searchParams.get("limit") ?? "50");
   const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 50;
 
@@ -43,6 +44,7 @@ export async function GET(req: Request) {
         : true
     )
     .filter((it) => (bezirk ? it.bezirk === bezirk : true))
+    .filter((it) => (gewerk ? it.gewerk === gewerk : true))
     .filter((it) =>
       q
         ? it.beschreibungDe.toLowerCase().includes(q) ||

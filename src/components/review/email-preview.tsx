@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pencil, Save, X } from "lucide-react";
 import { useCampaignStore } from "@/lib/campaign-store";
 import { getContent } from "@/lib/email-template-content";
-import { DEFAULT_SCENARIO_ID } from "@/lib/types";
+import { scenarios, scenariosOrder } from "@/lib/scenarios";
+import { DEFAULT_SCENARIO_ID, type ScenarioId } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Props = { recipientId: number };
@@ -18,6 +19,7 @@ export function EmailPreview({ recipientId }: Props) {
   const rendered = useCampaignStore((s) => s.renderCache[recipientId]);
   const draft = useCampaignStore((s) => s.drafts[recipientId]);
   const setOverride = useCampaignStore((s) => s.setOverride);
+  const setDraftScenario = useCampaignStore((s) => s.setDraftScenario);
   const [tab, setTab] = useState<"html" | "text">("html");
   const [editMode, setEditMode] = useState(false);
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -26,8 +28,6 @@ export function EmailPreview({ recipientId }: Props) {
   const scenarioId = draft?.scenarioId ?? DEFAULT_SCENARIO_ID;
 
   const subjectOverride = draft?.overrides.subject;
-  // Rendered subject reflects scenario + {itemTitle} resolution; fall back to raw
-  // scenario subject while the first render is pending.
   const subject =
     subjectOverride ||
     rendered?.subject ||
@@ -115,6 +115,42 @@ export function EmailPreview({ recipientId }: Props) {
           )}
         </div>
       </div>
+      {draft && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 bg-zinc-50/70 px-3 py-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+            Kundentyp
+          </span>
+          <div className="flex flex-wrap gap-1">
+            {scenariosOrder.map((id) => {
+              const s = scenarios[id];
+              const label = sprache === "it" ? s.labelIt : s.labelDe;
+              const isActive = scenarioId === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() =>
+                    setDraftScenario(recipientId, id as ScenarioId)
+                  }
+                  aria-pressed={isActive}
+                  title={sprache === "it" ? s.descriptionIt : s.descriptionDe}
+                  className={cn(
+                    "rounded-md border px-2 py-0.5 text-[11px] font-medium transition",
+                    isActive
+                      ? "border-blue-500 bg-blue-600 text-white"
+                      : "border-zinc-200 bg-white text-zinc-700 hover:border-blue-400 hover:text-blue-700"
+                  )}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <span className="ml-auto rounded bg-white px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-500 ring-1 ring-zinc-200">
+            vorausgewählt: System
+          </span>
+        </div>
+      )}
       {draft && (
         <div className="space-y-0.5 border-b border-zinc-100 bg-zinc-50/60 px-4 py-3 text-xs">
           <div className="flex gap-2">
