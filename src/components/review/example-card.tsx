@@ -76,7 +76,7 @@ export function ExampleCard({
   return (
     <div
       className={cn(
-        "group relative rounded-md border bg-zinc-50/60 px-3 py-2.5 text-sm transition",
+        "group relative rounded-md border bg-zinc-50/60 px-3 py-2.5 pr-10 text-sm transition",
         rejected
           ? "border-red-200 bg-red-50/40 opacity-60"
           : approved
@@ -84,6 +84,17 @@ export function ExampleCard({
             : "border-zinc-200"
       )}
     >
+      {!pinned && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Beispiel entfernen"
+          title="Entfernen"
+          className="absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded text-zinc-400 transition hover:bg-white hover:text-red-600"
+        >
+          <X size={14} />
+        </button>
+      )}
       <div className="mb-1 flex flex-wrap items-center gap-2">
         {example.datum && (
           <span className="text-xs text-zinc-500">{example.datum}</span>
@@ -143,22 +154,13 @@ export function ExampleCard({
           </button>
         </div>
         {!pinned && (
-          <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
-            <button
-              type="button"
-              onClick={onSwap}
-              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-600 transition hover:bg-white hover:text-blue-600"
-            >
-              <Repeat2 size={12} /> Austauschen
-            </button>
-            <button
-              type="button"
-              onClick={onRemove}
-              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-600 transition hover:bg-white hover:text-red-600"
-            >
-              <X size={12} /> Entfernen
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onSwap}
+            className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-600 transition hover:bg-white hover:text-blue-600"
+          >
+            <Repeat2 size={12} /> Austauschen
+          </button>
         )}
       </div>
     </div>

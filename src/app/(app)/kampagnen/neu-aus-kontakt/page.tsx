@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RecipientPicker } from "@/components/recipient-picker";
 import { Button } from "@/components/ui/button";
+import { CampaignStepper } from "@/components/campaign-stepper";
 
 export default function NeuAusKontaktPage() {
   const router = useRouter();
@@ -38,6 +39,7 @@ export default function NeuAusKontaktPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl px-8 py-8">
+        <CampaignStepper activeStep="auswahl" origin="recipient" />
         <header className="mb-6">
           <div className="text-xs font-medium uppercase tracking-wide text-blue-600">
             Richtung A · Schritt 1

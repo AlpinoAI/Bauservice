@@ -92,7 +92,7 @@ export type BeschlussExample = ExampleBase & {
   betrag?: number;
   geschaetzterBetrag?: number;
   status?: string;
-  projektyp?: string;
+  projekttyp?: string;
 };
 
 export type KonzessionExample = ExampleBase & {
