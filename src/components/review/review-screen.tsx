@@ -210,7 +210,7 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <div className="mx-auto w-full max-w-7xl px-8 py-6 pb-24">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-6 pb-24 md:px-6 lg:px-8">
         <CampaignStepper
           activeStep="review"
           campaignId={campaignId}
@@ -238,7 +238,7 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
         </header>
 
         {isItemFlow ? (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_520px]">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_480px]">
             <ItemContactsTable campaign={campaign} />
             <div className="lg:sticky lg:top-4 lg:self-start">
               {activeDraft ? (
@@ -268,7 +268,7 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
             <RecipientTabs />
 
             {activeDraft ? (
-              <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_520px]">
+              <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_480px]">
                 <ServiceTabsPanel
                   recipientId={activeDraft.recipientId}
                   pinnedService={pinnedService}

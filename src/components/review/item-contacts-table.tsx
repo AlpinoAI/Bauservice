@@ -22,7 +22,7 @@ type Props = {
 type MatchInfo = { score: number; reason?: string };
 
 const headerGrid =
-  "grid-cols-[minmax(220px,1fr)_minmax(90px,100px)_minmax(110px,140px)_minmax(140px,180px)_minmax(180px,220px)_minmax(150px,auto)]";
+  "grid-cols-[minmax(200px,1.3fr)_80px_minmax(100px,120px)_minmax(120px,1fr)_minmax(140px,170px)_minmax(130px,auto)]";
 
 function useItemMatching(campaign: Campaign): Map<number, MatchInfo> {
   const service = campaign.itemRef?.service;
