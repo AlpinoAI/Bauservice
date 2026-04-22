@@ -7,7 +7,13 @@ import { ServiceDetailSheet } from "@/components/services/service-detail-sheet";
 import { KategorienBadges } from "@/components/services/kategorien-badges";
 import { Badge } from "@/components/ui/badge";
 import { useDebounced } from "@/lib/use-debounced";
-import { bezirke, serviceLabels, servicesOrder } from "@/lib/filter-options";
+import {
+  bezirke,
+  gewerke,
+  konzessionenTypItToDe,
+  serviceLabels,
+  servicesOrder,
+} from "@/lib/filter-options";
 import { useStartCampaign } from "@/lib/use-start-campaign";
 import { betragOf, formatCurrency } from "@/lib/format";
 import type {
@@ -24,6 +30,8 @@ export default function ServicesPage() {
   const [service, setService] = useState<Service>("ausschreibungen");
   const [query, setQuery] = useState("");
   const [bezirk, setBezirk] = useState("");
+  const [gewerk, setGewerk] = useState("");
+  const [jahr, setJahr] = useState("");
   const [items, setItems] = useState<Example[]>([]);
   const [loading, setLoading] = useState(false);
   const { start, startingId } = useStartCampaign();
@@ -38,6 +46,8 @@ export default function ServicesPage() {
       const params = new URLSearchParams({ service });
       if (debouncedQuery) params.set("q", debouncedQuery);
       if (bezirk) params.set("bezirk", bezirk);
+      if (gewerk) params.set("gewerk", gewerk);
+      if (jahr) params.set("jahr", jahr);
       params.set("limit", "100");
       try {
         const res = await fetch(`/api/dummy/sql/items?${params}`, {
@@ -53,7 +63,16 @@ export default function ServicesPage() {
       }
     })();
     return () => ctrl.abort();
-  }, [service, debouncedQuery, bezirk]);
+  }, [service, debouncedQuery, bezirk, gewerk, jahr]);
+
+  const jahrOptions = useMemo(() => {
+    const years = new Set<string>();
+    for (const it of items) {
+      const y = it.datum?.slice(0, 4);
+      if (y && /^\d{4}$/.test(y)) years.add(y);
+    }
+    return Array.from(years).sort((a, b) => b.localeCompare(a));
+  }, [items]);
 
   const filters: FilterSpec[] = useMemo(
     () => [
@@ -64,8 +83,26 @@ export default function ServicesPage() {
         onChange: setBezirk,
         options: bezirke.map((b) => ({ value: b, label: b })),
       },
+      {
+        name: "gewerk",
+        label: "Gewerk",
+        value: gewerk,
+        onChange: setGewerk,
+        options: gewerke.map((g) => ({ value: g, label: g })),
+      },
+      ...(jahrOptions.length > 0
+        ? [
+            {
+              name: "jahr",
+              label: "Jahr",
+              value: jahr,
+              onChange: setJahr,
+              options: jahrOptions.map((y) => ({ value: y, label: y })),
+            },
+          ]
+        : []),
     ],
-    [bezirk]
+    [bezirk, gewerk, jahr, jahrOptions]
   );
 
   function startCampaign(it: Example) {
@@ -92,7 +129,11 @@ export default function ServicesPage() {
           <button
             key={s}
             type="button"
-            onClick={() => setService(s)}
+            onClick={() => {
+              setService(s);
+              setGewerk("");
+              setJahr("");
+            }}
             className={cn(
               "whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition",
               service === s
@@ -281,7 +322,10 @@ function ErgebnisseTable({
   onStart,
   onDetail,
 }: TableBaseProps<ErgebnisExample>) {
-  const cols = 8;
+  // Punkte nur einblenden, wenn mindestens ein Eintrag eine Bewertung hat —
+  // bei Preis-only-Vergaben ist die Spalte sonst durchgehend "—".
+  const showPunkte = items.some((it) => it.punkteBewertung != null);
+  const cols = showPunkte ? 8 : 7;
   return (
     <table className="w-full text-sm">
       <thead className="border-b border-zinc-100 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
@@ -292,7 +336,7 @@ function ErgebnisseTable({
           <th className="px-4 py-2 text-left">Kategorien</th>
           <th className="px-4 py-2 text-left">Ausgang (Zuschlag)</th>
           <th className="px-4 py-2 text-right">Abgebot</th>
-          <th className="px-4 py-2 text-right">Punkte</th>
+          {showPunkte && <th className="px-4 py-2 text-right">Punkte</th>}
           <th className="px-4 py-2" />
         </tr>
       </thead>
@@ -349,11 +393,13 @@ function ErgebnisseTable({
                   </div>
                 )}
               </td>
-              <td className="px-4 py-2.5 text-right text-xs whitespace-nowrap">
-                {it.punkteBewertung != null
-                  ? `${it.punkteBewertung} / 100`
-                  : "—"}
-              </td>
+              {showPunkte && (
+                <td className="px-4 py-2.5 text-right text-xs whitespace-nowrap">
+                  {it.punkteBewertung != null
+                    ? `${it.punkteBewertung} / 100`
+                    : "—"}
+                </td>
+              )}
               <td className="px-4 py-2.5 text-right">
                 <div className="inline-flex items-center gap-1">
                   <button
@@ -469,18 +515,19 @@ function KonzessionenTable({
   onStart,
   onDetail,
 }: TableBaseProps<KonzessionExample>) {
-  const cols = 8;
+  const cols = 9;
   return (
     <table className="w-full text-sm">
       <thead className="border-b border-zinc-100 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
         <tr>
+          <th className="px-4 py-2 text-left">Datum</th>
           <th className="px-4 py-2 text-left">Gemeinde</th>
           <th className="px-4 py-2 text-left">Typ</th>
           <th className="px-4 py-2 text-left">Bauherr</th>
           <th className="px-4 py-2 text-left">Projektant</th>
           <th className="px-4 py-2 text-left">Beschreibung</th>
           <th className="px-4 py-2 text-left">Kategorien</th>
-          <th className="px-4 py-2 text-left">Adresse</th>
+          <th className="px-4 py-2 text-left">Bauort</th>
           <th className="px-4 py-2" />
         </tr>
       </thead>
@@ -490,73 +537,89 @@ function KonzessionenTable({
         ) : items.length === 0 ? (
           <EmptyRow cols={cols} text="Keine Einträge gefunden." />
         ) : (
-          items.map((it) => (
-            <tr key={it.id} className="align-top transition hover:bg-zinc-50">
-              <td className="px-4 py-2.5 whitespace-nowrap font-medium text-zinc-900">
-                {it.gemeinde ?? "—"}
-                {it.bezirk && (
-                  <div className="text-xs font-normal text-zinc-500">
-                    {it.bezirk}
-                  </div>
-                )}
-              </td>
-              <td className="px-4 py-2.5 whitespace-nowrap">
-                {it.konzessionenTyp ? (
-                  <div className="flex flex-col gap-0.5">
-                    <Badge variant="blue">{it.konzessionenTyp}</Badge>
-                    {it.konzessionenTypvariante && (
-                      <span className="text-[10px] uppercase tracking-wide text-zinc-500">
-                        {it.konzessionenTypvariante}
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  <span className="text-zinc-400">—</span>
-                )}
-              </td>
-              <td className="max-w-[200px] px-4 py-2.5 font-medium text-zinc-900">
-                {it.name ?? <span className="font-normal text-zinc-400">—</span>}
-              </td>
-              <td className="max-w-[180px] px-4 py-2.5 text-xs text-zinc-700">
-                {it.projektantName ?? (
-                  <span className="text-zinc-400">
-                    {it.projektantId ? `ID ${it.projektantId}` : "—"}
-                  </span>
-                )}
-              </td>
-              <td className="max-w-[280px] px-4 py-2.5 text-zinc-800">
-                <p className="line-clamp-2 text-zinc-700">{it.beschreibungDe}</p>
-              </td>
-              <td className="px-4 py-2.5">
-                <KategorienBadges kategorien={it.kategorien} gewerk={it.gewerk} />
-              </td>
-              <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-700">
-                {it.adresse ?? "—"}
-                {it.ort && (
-                  <div className="text-zinc-500">
-                    {it.plz ? `${it.plz} ` : ""}
-                    {it.ort}
-                  </div>
-                )}
-              </td>
-              <td className="px-4 py-2.5 text-right">
-                <div className="inline-flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => onDetail(it)}
-                    className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-blue-500 hover:text-blue-700"
-                  >
-                    Details
-                  </button>
-                  <StartCampaignButton
-                    disabled={starting !== null}
-                    loading={starting === it.id}
-                    onClick={() => onStart(it)}
+          items.map((it) => {
+            const typLabel = it.konzessionenTyp
+              ? konzessionenTypItToDe[it.konzessionenTyp] ?? it.konzessionenTyp
+              : null;
+            return (
+              <tr key={it.id} className="align-top transition hover:bg-zinc-50">
+                <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-700">
+                  {it.datum ?? "—"}
+                </td>
+                <td className="px-4 py-2.5 whitespace-nowrap font-medium text-zinc-900">
+                  {it.gemeinde ?? "—"}
+                  {it.bezirk && (
+                    <div className="text-xs font-normal text-zinc-500">
+                      {it.bezirk}
+                    </div>
+                  )}
+                </td>
+                <td className="px-4 py-2.5 whitespace-nowrap">
+                  {typLabel ? (
+                    <span
+                      title={
+                        it.konzessionenTypvariante
+                          ? `Variante ${it.konzessionenTypvariante}`
+                          : undefined
+                      }
+                    >
+                      <Badge variant="blue">{typLabel}</Badge>
+                    </span>
+                  ) : (
+                    <span className="text-zinc-400">—</span>
+                  )}
+                </td>
+                <td className="max-w-[200px] px-4 py-2.5 font-medium text-zinc-900">
+                  {it.name ?? (
+                    <span className="font-normal text-zinc-400">—</span>
+                  )}
+                </td>
+                <td className="max-w-[180px] px-4 py-2.5 text-xs text-zinc-700">
+                  {it.projektantName ?? (
+                    <span className="text-zinc-400">
+                      {it.projektantId ? `ID ${it.projektantId}` : "—"}
+                    </span>
+                  )}
+                </td>
+                <td className="max-w-[280px] px-4 py-2.5 text-zinc-800">
+                  <p className="line-clamp-2 text-zinc-700">
+                    {it.beschreibungDe}
+                  </p>
+                </td>
+                <td className="px-4 py-2.5">
+                  <KategorienBadges
+                    kategorien={it.kategorien}
+                    gewerk={it.gewerk}
                   />
-                </div>
-              </td>
-            </tr>
-          ))
+                </td>
+                <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-700">
+                  {it.adresse ?? "—"}
+                  {it.ort && (
+                    <div className="text-zinc-500">
+                      {it.plz ? `${it.plz} ` : ""}
+                      {it.ort}
+                    </div>
+                  )}
+                </td>
+                <td className="px-4 py-2.5 text-right">
+                  <div className="inline-flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onDetail(it)}
+                      className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-blue-500 hover:text-blue-700"
+                    >
+                      Details
+                    </button>
+                    <StartCampaignButton
+                      disabled={starting !== null}
+                      loading={starting === it.id}
+                      onClick={() => onStart(it)}
+                    />
+                  </div>
+                </td>
+              </tr>
+            );
+          })
         )}
       </tbody>
     </table>

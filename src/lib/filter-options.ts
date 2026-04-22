@@ -43,6 +43,16 @@ export const bezirkItToDe: Record<string, Bezirk> = {
 // VectorDB_Oberkategorie_Unterkategorie.Oberkat liegt nur italienisch vor.
 // Katalog der 28 distinkten Werte (Stand DB-Snapshot 2026-04-22). Fehlende
 // Keys fallen im UI auf den Originalwert zurück.
+// Konzessionen-Typ-Werte aus VectorDB_Konzessionen.KonzessionenTyp (italienisch),
+// übersetzt für die UI. Max 5 distinkte Werte in Südtirol-Daten.
+export const konzessionenTypItToDe: Record<string, string> = {
+  "Richiesta concessione": "Konzessions-Ansuchen",
+  "Concessione edile": "Baukonzession",
+  Graduatoria: "Rangliste",
+  "Modifica piano urbanistico": "Bauleitplan-Änderung",
+  "Assegnazione terreno": "Grundstücks-Zuweisung",
+};
+
 export const oberkatItToDe: Record<string, string> = {
   "Acquisto/vendita immobili": "Immobilien",
   Agricoltura: "Landwirtschaft",

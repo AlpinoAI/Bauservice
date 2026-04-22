@@ -1384,8 +1384,9 @@ export function segmentFilter(
   segment: "neu" | "bestand" | "alle"
 ): boolean {
   if (segment === "alle") return true;
-  if (segment === "bestand") return r.rollen.kunde || r.hatHistorie;
-  return r.rollen.anbieter && !r.rollen.kunde && !r.hatHistorie;
+  const bestand = r.rollen.kunde || r.hatHistorie;
+  if (segment === "bestand") return bestand;
+  return r.rollen.anbieter && !bestand;
 }
 
 export function visibleRecipients(): Recipient[] {

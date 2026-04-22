@@ -19,6 +19,7 @@ export async function GET(req: Request) {
   const q = url.searchParams.get("q")?.trim().toLowerCase() ?? "";
   const bezirk = url.searchParams.get("bezirk")?.trim();
   const gewerk = url.searchParams.get("gewerk")?.trim();
+  const jahr = url.searchParams.get("jahr")?.trim();
   const limitRaw = Number(url.searchParams.get("limit") ?? "50");
   const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 50;
 
@@ -44,7 +45,12 @@ export async function GET(req: Request) {
         : true
     )
     .filter((it) => (bezirk ? it.bezirk === bezirk : true))
-    .filter((it) => (gewerk ? it.gewerk === gewerk : true))
+    .filter((it) => {
+      if (!gewerk) return true;
+      const kategorien = "kategorien" in it ? it.kategorien ?? [] : [];
+      return it.gewerk === gewerk || kategorien.includes(gewerk);
+    })
+    .filter((it) => (jahr ? (it.datum ?? "").startsWith(jahr) : true))
     .filter((it) =>
       q
         ? it.beschreibungDe.toLowerCase().includes(q) ||
