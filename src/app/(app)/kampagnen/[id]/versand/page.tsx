@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCampaignStore } from "@/lib/campaign-store";
+import { useAutoRender } from "@/lib/use-auto-render";
 import { EmailPreview } from "@/components/review/email-preview";
 import { CampaignStepper } from "@/components/campaign-stepper";
 
@@ -33,6 +34,8 @@ export default function VersandPage({
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<SendResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useAutoRender();
 
   useEffect(() => {
     if (storeCampaignId !== id) {

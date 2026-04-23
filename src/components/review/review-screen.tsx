@@ -1,18 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UserPlus } from "lucide-react";
-import type {
-  Campaign,
-  Example,
-  Recipient,
-  ScenarioId,
-  Service,
-  WithScore,
-} from "@/lib/types";
+import type { Campaign, Example, Recipient, WithScore } from "@/lib/types";
 import { useCampaignStore } from "@/lib/campaign-store";
-import type { RecipientDraft } from "@/lib/campaign-store";
 import { buildDraftForRecipient } from "@/lib/build-draft-for-recipient";
+import { useAutoRender } from "@/lib/use-auto-render";
 import { Badge } from "@/components/ui/badge";
 import { RecipientTabs } from "./recipient-tabs";
 import { ServiceTabsPanel } from "./service-tabs-panel";
@@ -21,52 +14,7 @@ import { EmailPreview } from "./email-preview";
 import { ApprovalBar } from "./approval-bar";
 import { RecipientSwapSheet } from "./recipient-swap-sheet";
 import { CampaignStepper } from "@/components/campaign-stepper";
-import { servicesOrder, serviceLabels } from "@/lib/filter-options";
-
-type RenderPayloadInput = {
-  draft: RecipientDraft;
-  pool: Record<Service, Example[]>;
-  scenarioId: ScenarioId;
-  itemRef?: Campaign["itemRef"];
-};
-
-function buildRenderPayload({
-  draft,
-  pool,
-  scenarioId,
-  itemRef,
-}: RenderPayloadInput) {
-  const examples: Record<Service, Example[]> = {
-    ausschreibungen: [],
-    ergebnisse: [],
-    beschluesse: [],
-    baukonzessionen: [],
-  };
-  for (const svc of servicesOrder) {
-    examples[svc] = draft.selectedExamples[svc]
-      .map((id) => pool[svc].find((e) => e.id === id))
-      .filter((e): e is Example => !!e);
-  }
-  const pinnedExample = itemRef
-    ? pool[itemRef.service].find((e) => e.id === itemRef.itemId)
-    : undefined;
-  return {
-    templateId: "default",
-    sprache: draft.sprache,
-    scenarioId,
-    payload: {
-      recipient: {
-        nameDe: draft.recipient.nameDe,
-        nameIt: draft.recipient.nameIt,
-        ansprechpartner: draft.recipient.ansprechpartner,
-      },
-      examples,
-      serviceEnabled: draft.serviceEnabled,
-      overrides: draft.overrides,
-      pinnedExample,
-    },
-  };
-}
+import { serviceLabels } from "@/lib/filter-options";
 
 export function ReviewScreen({ campaignId }: { campaignId: string }) {
   const campaign = useCampaignStore((s) => s.campaign);
@@ -78,8 +26,22 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
   const loadedRef = useRef<string | null>(null);
   const [swapOpen, setSwapOpen] = useState(false);
 
+  useAutoRender();
+
   useEffect(() => {
     if (loadedRef.current === campaignId) return;
+    // Kein Re-Fetch, wenn der Client-Store die Kampagne bereits hat — der
+    // serverseitige In-Memory-Store ist pro Vercel-Lambda isoliert und
+    // liefert auf kalter Instanz 404, was sonst "Lade Kampagne …" einfriert.
+    const existing = useCampaignStore.getState();
+    if (
+      existing.campaignId === campaignId &&
+      existing.campaign &&
+      Object.keys(existing.drafts).length > 0
+    ) {
+      loadedRef.current = campaignId;
+      return;
+    }
     loadedRef.current = campaignId;
     const store = useCampaignStore.getState();
     store.reset();
@@ -136,52 +98,6 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
       }
     })();
   }, [campaignId]);
-
-  const renderKey = useMemo(() => {
-    if (!activeDraft) return "";
-    return JSON.stringify({
-      id: activeDraft.recipientId,
-      se: activeDraft.selectedExamples,
-      en: activeDraft.serviceEnabled,
-      ov: activeDraft.overrides,
-      sp: activeDraft.sprache,
-      sc: activeDraft.scenarioId,
-      ir: campaign?.itemRef ?? null,
-    });
-  }, [activeDraft, campaign?.itemRef]);
-
-  useEffect(() => {
-    if (!renderKey) return;
-    const timer = setTimeout(async () => {
-      const state = useCampaignStore.getState();
-      const rid = state.activeRecipientId;
-      const draft = rid ? state.drafts[rid] : null;
-      if (!draft) return;
-      const payload = buildRenderPayload({
-        draft,
-        pool: state.examplesByService,
-        scenarioId: draft.scenarioId,
-        itemRef: state.campaign?.itemRef,
-      });
-      try {
-        const res = await fetch("/api/dummy/render/mjml", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as {
-          html: string;
-          text: string;
-          subject: string;
-        };
-        state.setRender(draft.recipientId, data.html, data.text, data.subject);
-      } catch {
-        // ignore
-      }
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [renderKey]);
 
   if (loading || !campaign) {
     return (

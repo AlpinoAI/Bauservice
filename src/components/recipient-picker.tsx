@@ -113,10 +113,9 @@ export function RecipientPicker({
   ];
 
   const colCount =
-    2 +
+    5 +
     (mode === "select" ? 1 : 0) +
-    (mode === "browse" && onStartCampaign ? 1 : 0) +
-    5;
+    (mode === "browse" && onStartCampaign ? 1 : 0);
 
   return (
     <div className="space-y-4">
@@ -130,21 +129,20 @@ export function RecipientPicker({
         leading={<SegmentToggle value={segment} onChange={setSegment} />}
       />
 
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-        <table className="w-full min-w-[900px] text-sm">
+      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+        <table className="w-full table-fixed text-sm">
           <thead className="border-b border-zinc-100 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
             <tr>
-              {mode === "select" && <th className="w-10 px-4 py-2" />}
-              <th className="px-4 py-2 text-left">Name / Ansprechpartner</th>
-              <th className="w-[92px] px-4 py-2 text-left">Typ</th>
-              <th className="w-[200px] px-4 py-2 text-left">
+              {mode === "select" && <th className="w-10 px-3 py-2" />}
+              <th className="px-3 py-2 text-left">Name / Ansprechpartner</th>
+              <th className="w-[76px] px-3 py-2 text-left">Typ</th>
+              <th className="w-[150px] px-3 py-2 text-left">
                 Gemeinde / Bezirk
               </th>
-              <th className="w-[180px] px-4 py-2 text-left">Gewerke</th>
-              <th className="w-[64px] px-4 py-2 text-center">Sprache</th>
-              <th className="w-[220px] px-4 py-2 text-left">Rollen</th>
+              <th className="w-[140px] px-3 py-2 text-left">Gewerke</th>
+              <th className="w-[110px] px-3 py-2 text-left">Rollen</th>
               {mode === "browse" && onStartCampaign && (
-                <th className="w-[170px] px-4 py-2" />
+                <th className="w-[110px] px-3 py-2" />
               )}
             </tr>
           </thead>
@@ -196,7 +194,7 @@ export function RecipientPicker({
                     }}
                   >
                     {mode === "select" && (
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3">
                         <span
                           className={cn(
                             "flex h-5 w-5 items-center justify-center rounded border transition",
@@ -210,9 +208,14 @@ export function RecipientPicker({
                         </span>
                       </td>
                     )}
-                    <td className="max-w-[320px] px-4 py-3">
-                      <div className="truncate font-medium text-zinc-900">
-                        {displayName}
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate font-medium text-zinc-900">
+                          {displayName}
+                        </span>
+                        <span className="shrink-0 rounded bg-zinc-100 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-500">
+                          {r.sprache}
+                        </span>
                       </div>
                       {apLine ? (
                         <div className="truncate text-xs text-zinc-600">
@@ -224,12 +227,12 @@ export function RecipientPicker({
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <Badge variant={bestand ? "green" : "blue"}>
                         {bestand ? "Bestand" : "Neu"}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3 text-zinc-700">
+                    <td className="px-3 py-3 text-zinc-700">
                       {locationLine ? (
                         <>
                           <div className="truncate">{locationLine}</div>
@@ -243,7 +246,7 @@ export function RecipientPicker({
                         <span className="text-zinc-400">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       {rGewerke.length === 0 ? (
                         <span className="text-zinc-400">—</span>
                       ) : (
@@ -261,16 +264,13 @@ export function RecipientPicker({
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-center uppercase text-zinc-500">
-                      {r.sprache}
-                    </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <div className="flex flex-wrap gap-1">
-                        <RollenBadges rollen={r.rollen} />
+                        <RollenBadges rollen={r.rollen} variant="compact" />
                       </div>
                     </td>
                     {mode === "browse" && onStartCampaign && (
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3 py-3 text-right">
                         <button
                           type="button"
                           onClick={(e) => {
@@ -278,11 +278,10 @@ export function RecipientPicker({
                             void onStartCampaign(r);
                           }}
                           disabled={startingId !== null}
+                          title="Kampagne starten"
                           className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
                         >
-                          {startingId === r.id
-                            ? "Lege an …"
-                            : "Kampagne starten"}
+                          {startingId === r.id ? "Lege an…" : "Starten"}
                           {startingId !== r.id && <ArrowRight size={12} />}
                         </button>
                       </td>
