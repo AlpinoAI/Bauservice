@@ -64,6 +64,14 @@ export function RecipientPicker({
     return () => ctrl.abort();
   }, [debouncedQuery, bezirk, rolle, gewerk, segment]);
 
+  // Im Kampagnen-Flow (select) nur potenzielle Empfänger von Werbe-Emails —
+  // reine Ausschreiber (Gemeinden/öffentliche Stellen ohne Anbieter- oder
+  // Kunden-Rolle) sind keine Zielgruppe und werden hier ausgeblendet.
+  const visibleItems =
+    mode === "select"
+      ? items.filter((r) => r.rollen.anbieter || r.rollen.kunde)
+      : items;
+
   function toggle(id: number) {
     if (!onSelectionChange) return;
     onSelectionChange(
@@ -88,22 +96,27 @@ export function RecipientPicker({
       onChange: setGewerk,
       options: gewerke.map((g) => ({ value: g, label: g })),
     },
-    {
-      name: "rolle",
-      label: "Rolle",
-      value: rolle,
-      onChange: setRolle,
-      options: rollenOptions.map((r) => ({ value: r.value, label: r.label })),
-    },
+    ...(mode === "browse"
+      ? [
+          {
+            name: "rolle",
+            label: "Rolle",
+            value: rolle,
+            onChange: setRolle,
+            options: rollenOptions.map((r) => ({
+              value: r.value,
+              label: r.label,
+            })),
+          },
+        ]
+      : []),
   ];
 
-  // Feste Spaltenbreiten statt `auto`, damit leere Zellen die Ausrichtung nicht verschieben.
-  const gridCols =
-    mode === "select"
-      ? "grid-cols-[auto_minmax(0,1fr)_90px_180px_170px_48px_200px]"
-      : onStartCampaign
-        ? "grid-cols-[minmax(0,1fr)_90px_180px_170px_48px_200px_auto]"
-        : "grid-cols-[minmax(0,1fr)_90px_180px_170px_48px_200px]";
+  const colCount =
+    2 +
+    (mode === "select" ? 1 : 0) +
+    (mode === "browse" && onStartCampaign ? 1 : 0) +
+    5;
 
   return (
     <div className="space-y-4">
@@ -112,154 +125,174 @@ export function RecipientPicker({
         onQueryChange={setQuery}
         placeholder="Name, Firma oder Email suchen…"
         filters={filters}
-        totalCount={items.length}
+        totalCount={visibleItems.length}
         totalLabel="Empfänger"
         leading={<SegmentToggle value={segment} onChange={setSegment} />}
       />
 
       <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-        <div
-          className={cn(
-            "grid items-center gap-4 border-b border-zinc-100 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-zinc-500",
-            gridCols
-          )}
-        >
-          {mode === "select" && <div className="w-5" />}
-          <div>Name / Ansprechpartner</div>
-          <div>Typ</div>
-          <div>Gemeinde / Bezirk</div>
-          <div>Gewerke</div>
-          <div className="text-center">Sprache</div>
-          <div>Rollen</div>
-          {mode === "browse" && onStartCampaign && <div />}
-        </div>
-
-        {loading && items.length === 0 ? (
-          <div className="px-4 py-10 text-center text-sm text-zinc-500">
-            Lade…
-          </div>
-        ) : items.length === 0 ? (
-          <div className="px-4 py-10 text-center text-sm text-zinc-500">
-            Keine Empfänger gefunden. Prüfe Filter oder Suchbegriff.
-          </div>
-        ) : (
-          <ul className="divide-y divide-zinc-100">
-            {items.map((r) => {
-              const selected = selectedIds.includes(r.id);
-              const displayName = r.sprache === "it" ? r.nameIt : r.nameDe;
-              const apLine = ansprechpartnerLabel(r.ansprechpartner);
-              const bestand = isBestandskunde(r);
-              const locationLine = r.gemeindeDe ?? r.bezirkDe ?? null;
-              const bezirkBelow =
-                r.gemeindeDe && r.bezirkDe ? r.bezirkDe : null;
-              const rGewerke = r.gewerke ?? [];
-
-              return (
-                <li
-                  key={r.id}
-                  className={cn(
-                    "grid items-center gap-4 px-4 py-3 text-sm transition",
-                    gridCols,
-                    selected ? "bg-blue-50" : "hover:bg-zinc-50",
-                    mode === "select" && "cursor-pointer"
-                  )}
-                  onClick={() => {
-                    if (mode === "select") {
-                      toggle(r.id);
-                    } else {
-                      setDetailRecipient(r);
-                    }
-                  }}
+        <table className="w-full min-w-[900px] text-sm">
+          <thead className="border-b border-zinc-100 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+            <tr>
+              {mode === "select" && <th className="w-10 px-4 py-2" />}
+              <th className="px-4 py-2 text-left">Name / Ansprechpartner</th>
+              <th className="w-[92px] px-4 py-2 text-left">Typ</th>
+              <th className="w-[200px] px-4 py-2 text-left">
+                Gemeinde / Bezirk
+              </th>
+              <th className="w-[180px] px-4 py-2 text-left">Gewerke</th>
+              <th className="w-[64px] px-4 py-2 text-center">Sprache</th>
+              <th className="w-[220px] px-4 py-2 text-left">Rollen</th>
+              {mode === "browse" && onStartCampaign && (
+                <th className="w-[170px] px-4 py-2" />
+              )}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-100">
+            {loading && visibleItems.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={colCount}
+                  className="px-4 py-10 text-center text-sm text-zinc-500"
                 >
-                  {mode === "select" && (
-                    <span
-                      className={cn(
-                        "flex h-5 w-5 items-center justify-center rounded border transition",
-                        selected
-                          ? "border-blue-600 bg-blue-600 text-white"
-                          : "border-zinc-300 bg-white"
+                  Lade…
+                </td>
+              </tr>
+            ) : visibleItems.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={colCount}
+                  className="px-4 py-10 text-center text-sm text-zinc-500"
+                >
+                  Keine Empfänger gefunden. Prüfe Filter oder Suchbegriff.
+                </td>
+              </tr>
+            ) : (
+              visibleItems.map((r) => {
+                const selected = selectedIds.includes(r.id);
+                const displayName = r.sprache === "it" ? r.nameIt : r.nameDe;
+                const apLine = ansprechpartnerLabel(r.ansprechpartner);
+                const bestand = isBestandskunde(r);
+                const locationLine = r.gemeindeDe ?? r.bezirkDe ?? null;
+                const bezirkBelow =
+                  r.gemeindeDe && r.bezirkDe ? r.bezirkDe : null;
+                const rGewerke = r.gewerke ?? [];
+
+                return (
+                  <tr
+                    key={r.id}
+                    className={cn(
+                      "align-top transition",
+                      selected ? "bg-blue-50" : "hover:bg-zinc-50",
+                      (mode === "select" || mode === "browse") &&
+                        "cursor-pointer"
+                    )}
+                    onClick={() => {
+                      if (mode === "select") {
+                        toggle(r.id);
+                      } else {
+                        setDetailRecipient(r);
+                      }
+                    }}
+                  >
+                    {mode === "select" && (
+                      <td className="px-4 py-3">
+                        <span
+                          className={cn(
+                            "flex h-5 w-5 items-center justify-center rounded border transition",
+                            selected
+                              ? "border-blue-600 bg-blue-600 text-white"
+                              : "border-zinc-300 bg-white"
+                          )}
+                          aria-hidden
+                        >
+                          {selected && <Check size={14} strokeWidth={3} />}
+                        </span>
+                      </td>
+                    )}
+                    <td className="max-w-[320px] px-4 py-3">
+                      <div className="truncate font-medium text-zinc-900">
+                        {displayName}
+                      </div>
+                      {apLine ? (
+                        <div className="truncate text-xs text-zinc-600">
+                          {apLine}
+                        </div>
+                      ) : (
+                        <div className="truncate text-xs text-zinc-400">
+                          {r.email}
+                        </div>
                       )}
-                      aria-hidden
-                    >
-                      {selected && <Check size={14} strokeWidth={3} />}
-                    </span>
-                  )}
-                  <div className="min-w-0">
-                    <div className="truncate font-medium text-zinc-900">
-                      {displayName}
-                    </div>
-                    {apLine ? (
-                      <div className="truncate text-xs text-zinc-600">
-                        {apLine}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant={bestand ? "green" : "blue"}>
+                        {bestand ? "Bestand" : "Neu"}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-zinc-700">
+                      {locationLine ? (
+                        <>
+                          <div className="truncate">{locationLine}</div>
+                          {bezirkBelow && (
+                            <div className="truncate text-xs text-zinc-500">
+                              {bezirkBelow}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-zinc-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {rGewerke.length === 0 ? (
+                        <span className="text-zinc-400">—</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {rGewerke.slice(0, 2).map((g) => (
+                            <Badge key={g} variant="neutral">
+                              {g}
+                            </Badge>
+                          ))}
+                          {rGewerke.length > 2 && (
+                            <Badge variant="gray">
+                              +{rGewerke.length - 2}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center uppercase text-zinc-500">
+                      {r.sprache}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        <RollenBadges rollen={r.rollen} />
                       </div>
-                    ) : (
-                      <div className="truncate text-xs text-zinc-400">
-                        {r.email}
-                      </div>
+                    </td>
+                    {mode === "browse" && onStartCampaign && (
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void onStartCampaign(r);
+                          }}
+                          disabled={startingId !== null}
+                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
+                        >
+                          {startingId === r.id
+                            ? "Lege an …"
+                            : "Kampagne starten"}
+                          {startingId !== r.id && <ArrowRight size={12} />}
+                        </button>
+                      </td>
                     )}
-                  </div>
-                  <div>
-                    <Badge variant={bestand ? "green" : "blue"}>
-                      {bestand ? "Bestand" : "Neu"}
-                    </Badge>
-                  </div>
-                  <div className="min-w-0 text-zinc-700">
-                    {locationLine ? (
-                      <>
-                        <div className="truncate">{locationLine}</div>
-                        {bezirkBelow && (
-                          <div className="truncate text-xs text-zinc-500">
-                            {bezirkBelow}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <span className="text-zinc-400">—</span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {rGewerke.length === 0 ? (
-                      <span className="text-zinc-400">—</span>
-                    ) : (
-                      <>
-                        {rGewerke.slice(0, 2).map((g) => (
-                          <Badge key={g} variant="neutral">
-                            {g}
-                          </Badge>
-                        ))}
-                        {rGewerke.length > 2 && (
-                          <Badge variant="gray">+{rGewerke.length - 2}</Badge>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  <div className="text-center uppercase text-zinc-500">
-                    {r.sprache}
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    <RollenBadges rollen={r.rollen} />
-                  </div>
-                  {mode === "browse" && onStartCampaign && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void onStartCampaign(r);
-                      }}
-                      disabled={startingId !== null}
-                      className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
-                    >
-                      {startingId === r.id
-                        ? "Lege an …"
-                        : "Kampagne starten"}
-                      {startingId !== r.id && <ArrowRight size={12} />}
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
 
       {mode === "browse" && (
