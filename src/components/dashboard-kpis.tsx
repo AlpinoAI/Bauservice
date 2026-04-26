@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { BarChart3, Mails, Send, Users } from "lucide-react";
-import type { Campaign, Recipient } from "@/lib/types";
+import type { Campaign } from "@/lib/types";
+import { searchContacts } from "@/lib/contacts-client";
+import { useApiKey } from "@/lib/use-api-key";
 
 type Kpi = {
   label: string;
@@ -35,18 +37,25 @@ export function DashboardKpis() {
   const [loading, setLoading] = useState(true);
   const [recipients, setRecipients] = useState(0);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const apiKey = useApiKey();
 
   useEffect(() => {
+    if (!apiKey) return;
+    const ctrl = new AbortController();
     Promise.all([
-      fetch("/api/dummy/sql/recipients?limit=200").then((r) => r.json()),
-      fetch("/api/dummy/sql/campaigns").then((r) => r.json()),
+      searchContacts({ limit: 200 }, apiKey, ctrl.signal),
+      fetch("/api/dummy/sql/campaigns", { signal: ctrl.signal }).then((r) => r.json()),
     ])
       .then(([r, c]) => {
-        setRecipients((r.items as Recipient[])?.length ?? 0);
+        setRecipients(r.items.length);
         setCampaigns((c.items as Campaign[]) ?? []);
       })
+      .catch((err) => {
+        if (err instanceof Error && err.name === "AbortError") return;
+      })
       .finally(() => setLoading(false));
-  }, []);
+    return () => ctrl.abort();
+  }, [apiKey]);
 
   const draft = campaigns.filter((c) => c.status === "draft").length;
   const sent = campaigns.filter((c) => c.status === "sent").length;

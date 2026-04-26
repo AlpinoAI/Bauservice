@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { SearchFilterBar, type FilterSpec } from "./search-filter-bar";
 import {
   AusschreibungenTable,
@@ -23,6 +24,13 @@ import {
   serviceLabels,
   servicesOrder,
 } from "@/lib/filter-options";
+import { useApiKey } from "@/lib/use-api-key";
+import {
+  searchTenders,
+  searchResults,
+  searchProjects,
+  searchConcessions,
+} from "@/lib/items-client";
 import { cn } from "@/lib/utils";
 
 type Selection = { service: Service; itemId: number };
@@ -39,25 +47,34 @@ export function ItemPicker({ selected = null, onSelectionChange }: Props) {
   const [gewerk, setGewerk] = useState("");
   const [jahr, setJahr] = useState("");
   const [items, setItems] = useState<Example[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const debouncedQuery = useDebounced(query, 200);
+  const apiKey = useApiKey();
+
+  const PAGE_SIZE = 10;
+
+  // Reset to first page whenever filters or service change
+  useEffect(() => {
+    setPage(0);
+  }, [service, debouncedQuery, bezirk, gewerk, jahr]);
 
   useEffect(() => {
+    if (!apiKey) return;
     const ctrl = new AbortController();
+    const params = { q: debouncedQuery || undefined, bezirk: bezirk || undefined, gewerk: gewerk || undefined, jahr: jahr || undefined, page, limit: PAGE_SIZE };
     (async () => {
       setLoading(true);
-      const params = new URLSearchParams({ service });
-      if (debouncedQuery) params.set("q", debouncedQuery);
-      if (bezirk) params.set("bezirk", bezirk);
-      if (gewerk) params.set("gewerk", gewerk);
-      if (jahr) params.set("jahr", jahr);
       try {
-        const res = await fetch(`/api/dummy/sql/items?${params}`, {
-          signal: ctrl.signal,
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as { items: Example[] };
+        const fn =
+          service === "ausschreibungen" ? searchTenders :
+          service === "ergebnisse" ? searchResults :
+          service === "beschluesse" ? searchProjects :
+          searchConcessions;
+        const data = await fn(params, apiKey, ctrl.signal);
         setItems(data.items);
+        setTotal(data.total);
       } catch {
         // aborted
       } finally {
@@ -65,7 +82,7 @@ export function ItemPicker({ selected = null, onSelectionChange }: Props) {
       }
     })();
     return () => ctrl.abort();
-  }, [service, debouncedQuery, bezirk, gewerk, jahr]);
+  }, [service, debouncedQuery, bezirk, gewerk, jahr, page, apiKey]);
 
   const jahrOptions = useMemo(() => {
     const years = new Set<string>();
@@ -146,7 +163,7 @@ export function ItemPicker({ selected = null, onSelectionChange }: Props) {
         onQueryChange={setQuery}
         placeholder={`In ${serviceLabels[service]} suchen…`}
         filters={filters}
-        totalCount={items.length}
+        totalCount={total}
         totalLabel="Einträge"
       />
 
@@ -188,6 +205,36 @@ export function ItemPicker({ selected = null, onSelectionChange }: Props) {
           />
         )}
       </div>
+      {total > PAGE_SIZE && (
+        <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-600">
+          <span>
+            {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} von {total}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setPage((p) => p - 1)}
+              disabled={page === 0 || loading}
+              className="rounded p-1 transition hover:bg-zinc-100 disabled:opacity-40"
+              aria-label="Vorherige Seite"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="min-w-[60px] text-center text-xs">
+              Seite {page + 1} / {Math.ceil(total / PAGE_SIZE)}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={(page + 1) * PAGE_SIZE >= total || loading}
+              className="rounded p-1 transition hover:bg-zinc-100 disabled:opacity-40"
+              aria-label="Nächste Seite"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

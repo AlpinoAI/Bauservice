@@ -176,17 +176,14 @@ export function AusschreibungenTable({
                   <p className="line-clamp-3">{it.beschreibungDe}</p>
                 </td>
                 <td className="px-4 py-2.5">
-                  <KategorienBadges
-                    kategorien={it.kategorien}
-                    gewerk={it.gewerk}
-                  />
+                  <KategorienBadges kategorien={it.kategorien} gewerk={it.gewerk} />
                 </td>
                 <td className="px-4 py-2.5 text-right font-medium whitespace-nowrap">
                   {formatCurrency(it.betrag) ?? "—"}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-xs">
                   {it.frist ? (
-                    <span className="text-zinc-700">Angebot bis {it.frist}</span>
+                    <span className="text-zinc-700">Angebot bis {it.datum}</span>
                   ) : (
                     <span className="text-zinc-400">—</span>
                   )}
@@ -268,7 +265,7 @@ export function ErgebnisseTable({
                   )}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-700">
-                  <div>{it.nummer ?? it.ausschreibungId}</div>
+                  <div>{it.nummer ?? it.ausschreiberName}</div>
                   {it.datum && <div className="text-zinc-500">{it.datum}</div>}
                 </td>
                 <td className="max-w-[300px] px-4 py-2.5 text-zinc-800">
@@ -398,7 +395,7 @@ export function BeschluesseTable({
                   {it.beschlussNr ?? "—"}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-700">
-                  {it.beschlussDatum ?? it.datum ?? "—"}
+                  {it.datum ?? "—"}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap">
                   {it.bezirk ? (
@@ -503,13 +500,13 @@ export function KonzessionenTable({
                   </td>
                 )}
                 <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-700">
-                  {it.datum ?? "—"}
+                  {it.Datum ?? "—"}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap font-medium text-zinc-900">
-                  {it.gemeinde ?? "—"}
-                  {it.bezirk && (
+                  {it.Gemeinde ?? "—"}
+                  {it.Bezirke_BezeichnungI && (
                     <div className="text-xs font-normal text-zinc-500">
-                      {it.bezirk}
+                      {it.Bezirke_BezeichnungI}
                     </div>
                   )}
                 </td>
@@ -542,7 +539,7 @@ export function KonzessionenTable({
                 </td>
                 <td className="max-w-[280px] px-4 py-2.5 text-zinc-800">
                   <p className="line-clamp-2 text-zinc-700">
-                    {it.beschreibungDe}
+                    {it.conz_desc_d}
                   </p>
                 </td>
                 <td className="px-4 py-2.5">

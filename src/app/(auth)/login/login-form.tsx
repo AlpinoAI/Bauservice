@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAuthStore } from "@/lib/auth-store";
 
 export function LoginForm() {
   const router = useRouter();
@@ -22,6 +23,8 @@ export function LoginForm() {
       body: JSON.stringify({ password }),
     });
     if (res.ok) {
+      const data = (await res.json()) as { ok: true; apiKey: string };
+      useAuthStore.getState().setApiKey(data.apiKey);
       router.replace(from);
       router.refresh();
     } else {
