@@ -51,19 +51,28 @@ const num = (v: unknown): number | undefined => {
   }
   return undefined;
 };
+// DB liefert Datums als RFC-2822 ("Thu, 08 Nov 2012 00:00:00 GMT") — für UI &
+// Filter wird einheitliches ISO ("2012-11-08") gebraucht (slice(0,4)=Jahr).
+const date = (v: unknown): string | undefined => {
+  const s = str(v);
+  if (!s) return undefined;
+  const t = Date.parse(s);
+  if (Number.isNaN(t)) return s;
+  return new Date(t).toISOString().slice(0, 10);
+};
 
 function mapTender(row: DbRow): AusschreibungExample {
   return {
     id: num(row.AusschreibungenID) ?? 0,
     service: "ausschreibungen",
-    datum: str(row.Datum),
+    datum: date(row.Datum),
     bezirk: toBezirkDe(str(row.Bezirk)),
     beschreibungDe: str(row.Beschreibung_D) ?? "",
     beschreibungIt: str(row.Beschreibung_I) ?? "",
     quelle: { table: "VectorDB_Ausschreibungen", pk: "AusschreibungenID" },
     ausschreiberId: num(row.Ausschreiber_id),
     ausschreiberName: str(row.Ausschreiber_name),
-    frist: str(row.DatumOffert),
+    frist: date(row.DatumOffert),
     betrag: num(row.Betrag),
     cig: str(row.CIG),
     cup: str(row.CUP),
@@ -76,7 +85,7 @@ function mapResult(row: DbRow): ErgebnisExample {
   return {
     id: ausschreibungenId,
     service: "ergebnisse",
-    datum: str(row.Datum_Zuschlag) ?? str(row.Datum),
+    datum: date(row.Datum_Zuschlag) ?? date(row.Datum),
     bezirk: toBezirkDe(str(row.Bezirk)),
     beschreibungDe: str(row.Beschreibung_D) ?? "",
     beschreibungIt: str(row.Beschreibung_I) ?? "",
@@ -96,7 +105,7 @@ function mapProject(row: DbRow): BeschlussExample {
   return {
     id: num(row.ProjektierungenId) ?? 0,
     service: "beschluesse",
-    datum: str(row.Datum),
+    datum: date(row.Datum),
     bezirk: toBezirkDe(str(row.Bezirk)),
     beschreibungDe: str(row.BeschreibungD) ?? "",
     beschreibungIt: str(row.BeschreibungI) ?? "",
@@ -112,7 +121,7 @@ function mapConcession(row: DbRow): KonzessionExample {
   return {
     id: num(row.KonzessionenID) ?? 0,
     service: "baukonzessionen",
-    datum: str(row.Datum),
+    datum: date(row.Datum),
     bezirk: toBezirkDe(str(row.Bezirke_BezeichnungI)),
     beschreibungDe: str(row.conz_desc_d) ?? "",
     beschreibungIt: str(row.conz_desc_i) ?? "",

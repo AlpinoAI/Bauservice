@@ -12,6 +12,14 @@ export function formatCurrency(
   }).format(value);
 }
 
+// Mappers normalisieren Daten zu ISO ("YYYY-MM-DD"). Hier zur Anzeige in DE.
+export function formatDate(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+  return value;
+}
+
 export function betragOf(it: Example): number | undefined {
   if ("betrag" in it && typeof it.betrag === "number") return it.betrag;
   if ("geschaetzterBetrag" in it && typeof it.geschaetzterBetrag === "number")
