@@ -189,12 +189,15 @@ function buildSection(
     }
     blocks.push(buildExampleBlock(ex, sprache, pack));
   });
+  // Leerer Heading = Item-Flow: nur das eine pinnedExample anzeigen, keine
+  // generische "Aktuelle Ausschreibungen"-Überschrift drüber.
+  const headingRow = heading
+    ? `<tr><td style="padding-top:22px;padding-bottom:4px;font-size:14px;font-weight:600;color:#0f172a;letter-spacing:-0.01em;">${escape(heading)}</td></tr>`
+    : "";
   return `
+    ${headingRow}
     <tr>
-      <td style="padding-top:22px;padding-bottom:4px;font-size:14px;font-weight:600;color:#0f172a;letter-spacing:-0.01em;">${escape(heading)}</td>
-    </tr>
-    <tr>
-      <td>
+      <td style="padding-top:${heading ? "0" : "16px"};">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
           ${blocks.join("")}
         </table>
@@ -340,11 +343,15 @@ function buildHtml(
   const anyExamples = activeServices.some(
     (s) => (payload.examples[s] ?? []).length > 0
   );
+  // Im Item-Flow gibt's genau ein pinnedExample und nur einen aktiven Service —
+  // dort lassen wir die Service-Überschrift ("Aktuelle Ausschreibungen") weg,
+  // weil die Bridge bereits auf den einen Eintrag hinführt.
+  const isItemFlow = payload.pinnedExample != null;
   const sections = anyExamples
     ? activeServices
         .map((s) =>
           buildSection(
-            pack.serviceLabels[s],
+            isItemFlow ? "" : pack.serviceLabels[s],
             payload.examples[s] ?? [],
             sprache,
             pack

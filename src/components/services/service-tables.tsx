@@ -500,13 +500,13 @@ export function KonzessionenTable({
                   </td>
                 )}
                 <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-700">
-                  {it.Datum ?? "—"}
+                  {it.datum ?? "—"}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap font-medium text-zinc-900">
-                  {it.Gemeinde ?? "—"}
-                  {it.Bezirke_BezeichnungI && (
+                  {it.gemeinde ?? "—"}
+                  {it.bezirk && (
                     <div className="text-xs font-normal text-zinc-500">
-                      {it.Bezirke_BezeichnungI}
+                      {it.bezirk}
                     </div>
                   )}
                 </td>
@@ -539,7 +539,7 @@ export function KonzessionenTable({
                 </td>
                 <td className="max-w-[280px] px-4 py-2.5 text-zinc-800">
                   <p className="line-clamp-2 text-zinc-700">
-                    {it.conz_desc_d}
+                    {it.beschreibungDe}
                   </p>
                 </td>
                 <td className="px-4 py-2.5">
