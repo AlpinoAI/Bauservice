@@ -72,15 +72,17 @@ function mapTender(row: DbRow): AusschreibungExample {
 }
 
 function mapResult(row: DbRow): ErgebnisExample {
+  const ausschreibungenId = num(row.AusschreibungenID) ?? 0;
   return {
-    id: num(row.AusschreibungenID) ?? 0,
+    id: ausschreibungenId,
     service: "ergebnisse",
     datum: str(row.Datum_Zuschlag) ?? str(row.Datum),
     bezirk: toBezirkDe(str(row.Bezirk)),
     beschreibungDe: str(row.Beschreibung_D) ?? "",
     beschreibungIt: str(row.Beschreibung_I) ?? "",
     quelle: { table: "VectorDB_Ausschreibungen", pk: "AusschreibungenID" },
-    ausschreibungId: num(row.AusschreibungenID) ?? 0,
+    ausschreibungId: ausschreibungenId,
+    nummer: ausschreibungenId ? String(ausschreibungenId) : undefined,
     ausschreiberId: num(row.Ausschreiber_id),
     ausschreiberName: str(row.Ausschreiber_name),
     teilnehmerId: num(row.gewinner_id) ?? 0,
