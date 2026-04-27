@@ -25,5 +25,5 @@ export async function POST(req: Request) {
     path: "/",
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, apiKey: process.env.BACKEND_API_KEY ?? "" });
 }

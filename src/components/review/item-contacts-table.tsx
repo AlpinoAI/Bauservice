@@ -14,6 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScoreBar } from "@/components/ui/score-bar";
 import { useDebounced } from "@/lib/use-debounced";
 import { cn } from "@/lib/utils";
+import { searchContacts } from "@/lib/contacts-client";
+import { useApiKey } from "@/lib/use-api-key";
 
 type Props = {
   campaign: Campaign;
@@ -241,6 +243,7 @@ function AddContactsSheet({
   const [searchResults, setSearchResults] = useState<Recipient[]>([]);
   const [addingId, setAddingId] = useState<number | null>(null);
   const debouncedSearch = useDebounced(search, 200);
+  const apiKey = useApiKey();
 
   useEffect(() => {
     if (campaign.origin !== "item" || !campaign.itemRef) return;
@@ -268,24 +271,22 @@ function AddContactsSheet({
   }, [campaign]);
 
   useEffect(() => {
+    if (!apiKey) return;
     const ctrl = new AbortController();
     (async () => {
-      const params = new URLSearchParams();
-      if (debouncedSearch) params.set("q", debouncedSearch);
-      params.set("limit", "30");
       try {
-        const res = await fetch(`/api/dummy/sql/recipients?${params}`, {
-          signal: ctrl.signal,
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as { items: Recipient[] };
+        const data = await searchContacts(
+          { q: debouncedSearch || undefined, limit: 30 },
+          apiKey,
+          ctrl.signal
+        );
         setSearchResults(data.items);
       } catch {
         // ignore
       }
     })();
     return () => ctrl.abort();
-  }, [debouncedSearch]);
+  }, [apiKey, debouncedSearch]);
 
   const existingIds = useMemo(
     () => new Set(Object.keys(existingDrafts).map((n) => Number(n))),

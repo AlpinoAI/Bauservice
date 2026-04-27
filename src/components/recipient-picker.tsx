@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ArrowRight, Check } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowRight, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { SearchFilterBar, type FilterSpec } from "./search-filter-bar";
 import { RecipientDetailSheet } from "./recipient-detail-sheet";
 import { RollenBadges } from "./rollen-badges";
@@ -11,6 +11,8 @@ import { bezirke, gewerke, rollenOptions } from "@/lib/filter-options";
 import { Badge } from "@/components/ui/badge";
 import { ansprechpartnerLabel, isBestandskunde } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { searchContacts } from "@/lib/contacts-client";
+import { useApiKey } from "@/lib/use-api-key";
 
 type Props = {
   mode?: "select" | "browse";
@@ -32,37 +34,48 @@ export function RecipientPicker({
   const [rolle, setRolle] = useState("");
   const [gewerk, setGewerk] = useState("");
   const [segment, setSegment] = useState<RecipientSegment>("alle");
+  const [page, setPage] = useState(0);
   const [items, setItems] = useState<Recipient[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [detailRecipient, setDetailRecipient] = useState<Recipient | null>(null);
 
+  const PAGE_SIZE = 10;
   const debouncedQuery = useDebounced(query, 200);
+  const apiKey = useApiKey();
+
+  // Reset page when debouncedQuery changes (ref avoids firing on first mount)
+  const prevDebouncedQuery = useRef(debouncedQuery);
+  useEffect(() => {
+    if (debouncedQuery !== prevDebouncedQuery.current) {
+      prevDebouncedQuery.current = debouncedQuery;
+      setPage(0);
+    }
+  }, [debouncedQuery]);
 
   useEffect(() => {
+    if (!apiKey) return;
     const ctrl = new AbortController();
     (async () => {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (debouncedQuery) params.set("q", debouncedQuery);
-      if (bezirk) params.set("bezirk", bezirk);
-      if (rolle) params.set("rolle", rolle);
-      if (gewerk) params.set("gewerk", gewerk);
-      params.set("segment", segment);
       try {
-        const res = await fetch(`/api/dummy/sql/recipients?${params}`, {
-          signal: ctrl.signal,
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as { items: Recipient[] };
+        const data = await searchContacts(
+          { q: debouncedQuery || undefined, bezirk: bezirk || undefined, rolle: rolle || undefined, gewerk: gewerk || undefined, segment, page, limit: PAGE_SIZE },
+          apiKey,
+          ctrl.signal
+        );
         setItems(data.items);
-      } catch {
-        // AbortError ignorieren
-      } finally {
+        setTotal(data.total);
         setLoading(false);
+      } catch (err) {
+        if (!(err instanceof Error && err.name === "AbortError")) {
+          setLoading(false);
+        }
+        // AbortError: new request already in flight, leave loading state as-is
       }
     })();
     return () => ctrl.abort();
-  }, [debouncedQuery, bezirk, rolle, gewerk, segment]);
+  }, [apiKey, debouncedQuery, bezirk, rolle, gewerk, segment, page]);
 
   // Im Kampagnen-Flow (select) nur potenzielle Empfänger von Werbe-Emails —
   // reine Ausschreiber (Gemeinden/öffentliche Stellen ohne Anbieter- oder
@@ -86,14 +99,14 @@ export function RecipientPicker({
       name: "bezirk",
       label: "Bezirk",
       value: bezirk,
-      onChange: setBezirk,
+      onChange: (v) => { setBezirk(v); setPage(0); },
       options: bezirke.map((b) => ({ value: b, label: b })),
     },
     {
       name: "gewerk",
       label: "Gewerk",
       value: gewerk,
-      onChange: setGewerk,
+      onChange: (v) => { setGewerk(v); setPage(0); },
       options: gewerke.map((g) => ({ value: g, label: g })),
     },
     ...(mode === "browse"
@@ -102,7 +115,7 @@ export function RecipientPicker({
             name: "rolle",
             label: "Rolle",
             value: rolle,
-            onChange: setRolle,
+            onChange: (v: string) => { setRolle(v); setPage(0); },
             options: rollenOptions.map((r) => ({
               value: r.value,
               label: r.label,
@@ -124,9 +137,9 @@ export function RecipientPicker({
         onQueryChange={setQuery}
         placeholder="Name, Firma oder Email suchen…"
         filters={filters}
-        totalCount={visibleItems.length}
+        totalCount={total}
         totalLabel="Empfänger"
-        leading={<SegmentToggle value={segment} onChange={setSegment} />}
+        leading={<SegmentToggle value={segment} onChange={(v) => { setSegment(v); setPage(0); }} />}
       />
 
       <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
@@ -293,6 +306,37 @@ export function RecipientPicker({
           </tbody>
         </table>
       </div>
+
+      {total > PAGE_SIZE && (
+        <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-600">
+          <span>
+            {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} von {total}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setPage((p) => p - 1)}
+              disabled={page === 0 || loading}
+              className="rounded p-1 transition hover:bg-zinc-100 disabled:opacity-40"
+              aria-label="Vorherige Seite"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="min-w-[60px] text-center text-xs">
+              Seite {page + 1} / {Math.ceil(total / PAGE_SIZE)}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={(page + 1) * PAGE_SIZE >= total || loading}
+              className="rounded p-1 transition hover:bg-zinc-100 disabled:opacity-40"
+              aria-label="Nächste Seite"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {mode === "browse" && (
         <RecipientDetailSheet

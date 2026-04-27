@@ -1,6 +1,11 @@
 import type { Campaign } from "@/lib/types";
 
-const store: Campaign[] = [];
+const globalForCampaigns = globalThis as unknown as {
+  __bauserviceCampaignStore?: Campaign[];
+};
+const store: Campaign[] =
+  globalForCampaigns.__bauserviceCampaignStore ??
+  (globalForCampaigns.__bauserviceCampaignStore = []);
 
 export function listCampaigns(filter?: { status?: "draft" | "sent" }): Campaign[] {
   if (!filter?.status) return store;

@@ -10,7 +10,7 @@ import type {
 import { Badge } from "@/components/ui/badge";
 import { StartCampaignButton } from "@/components/ui/start-campaign-button";
 import { KategorienBadges } from "@/components/services/kategorien-badges";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { konzessionenTypItToDe } from "@/lib/filter-options";
 import { cn } from "@/lib/utils";
 
@@ -165,7 +165,9 @@ export function AusschreibungenTable({
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-700">
                   <div>{it.nummer ?? it.id}</div>
-                  {it.datum && <div className="text-zinc-500">{it.datum}</div>}
+                  {it.datum && (
+                    <div className="text-zinc-500">{formatDate(it.datum)}</div>
+                  )}
                 </td>
                 <td className="max-w-[360px] px-4 py-2.5 text-zinc-800">
                   {it.gewerk && (
@@ -176,17 +178,16 @@ export function AusschreibungenTable({
                   <p className="line-clamp-3">{it.beschreibungDe}</p>
                 </td>
                 <td className="px-4 py-2.5">
-                  <KategorienBadges
-                    kategorien={it.kategorien}
-                    gewerk={it.gewerk}
-                  />
+                  <KategorienBadges kategorien={it.kategorien} gewerk={it.gewerk} />
                 </td>
                 <td className="px-4 py-2.5 text-right font-medium whitespace-nowrap">
                   {formatCurrency(it.betrag) ?? "—"}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-xs">
                   {it.frist ? (
-                    <span className="text-zinc-700">Angebot bis {it.frist}</span>
+                    <span className="text-zinc-700">
+                      Angebot bis {formatDate(it.frist)}
+                    </span>
                   ) : (
                     <span className="text-zinc-400">—</span>
                   )}
@@ -268,8 +269,10 @@ export function ErgebnisseTable({
                   )}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-700">
-                  <div>{it.nummer ?? it.ausschreibungId}</div>
-                  {it.datum && <div className="text-zinc-500">{it.datum}</div>}
+                  <div>{it.nummer ?? it.ausschreiberName}</div>
+                  {it.datum && (
+                    <div className="text-zinc-500">{formatDate(it.datum)}</div>
+                  )}
                 </td>
                 <td className="max-w-[300px] px-4 py-2.5 text-zinc-800">
                   {it.gewerk && (
@@ -398,7 +401,7 @@ export function BeschluesseTable({
                   {it.beschlussNr ?? "—"}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-700">
-                  {it.beschlussDatum ?? it.datum ?? "—"}
+                  {formatDate(it.datum) ?? "—"}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap">
                   {it.bezirk ? (
@@ -503,7 +506,7 @@ export function KonzessionenTable({
                   </td>
                 )}
                 <td className="px-4 py-2.5 whitespace-nowrap text-xs text-zinc-700">
-                  {it.datum ?? "—"}
+                  {formatDate(it.datum) ?? "—"}
                 </td>
                 <td className="px-4 py-2.5 whitespace-nowrap font-medium text-zinc-900">
                   {it.gemeinde ?? "—"}

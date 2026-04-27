@@ -2,8 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { UserPlus } from "lucide-react";
-import type { Campaign, Example, Recipient, WithScore } from "@/lib/types";
+import type { Campaign, Example, WithScore } from "@/lib/types";
 import { useCampaignStore } from "@/lib/campaign-store";
+import { searchContacts } from "@/lib/contacts-client";
+import { getItemById } from "@/lib/items-client";
+import { useApiKey } from "@/lib/use-api-key";
 import { buildDraftForRecipient } from "@/lib/build-draft-for-recipient";
 import { useAutoRender } from "@/lib/use-auto-render";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +24,7 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
   const activeId = useCampaignStore((s) => s.activeRecipientId);
   const drafts = useCampaignStore((s) => s.drafts);
   const loading = useCampaignStore((s) => s.loading);
+  const apiKey = useApiKey();
 
   const activeDraft = activeId ? drafts[activeId] : null;
   const loadedRef = useRef<string | null>(null);
@@ -29,6 +33,7 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
   useAutoRender();
 
   useEffect(() => {
+    if (!apiKey) return;
     if (loadedRef.current === campaignId) return;
     // Kein Re-Fetch, wenn der Client-Store die Kampagne bereits hat — der
     // serverseitige In-Memory-Store ist pro Vercel-Lambda isoliert und
@@ -53,9 +58,7 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
         if (!cRes.ok) return;
         const c = (await cRes.json()) as Campaign;
 
-        const rRes = await fetch(`/api/dummy/sql/recipients?limit=500`);
-        if (!rRes.ok) return;
-        const rData = (await rRes.json()) as { items: Recipient[] };
+        const rData = await searchContacts({ limit: 500 }, apiKey);
         const recipients = rData.items.filter((r) =>
           c.recipientIds.includes(r.id)
         );
@@ -64,22 +67,18 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
 
         let pinnedItem: WithScore<Example> | undefined;
         if (c.origin === "item" && c.itemRef) {
-          const piRes = await fetch(
-            `/api/dummy/sql/items?service=${c.itemRef.service}&limit=100`
+          const pinItem = await getItemById(
+            c.itemRef.service,
+            c.itemRef.itemId,
+            apiKey
           );
-          if (piRes.ok) {
-            const piData = (await piRes.json()) as { items: Example[] };
-            const pinItem = piData.items.find(
-              (x) => x.id === c.itemRef!.itemId
-            );
-            if (pinItem) {
-              pinnedItem = {
-                ...pinItem,
-                score: 1,
-                reason: "Ursprungs-Eintrag der Kampagne",
-              };
-              useCampaignStore.getState().addToPool(c.itemRef.service, [pinnedItem]);
-            }
+          if (pinItem) {
+            pinnedItem = {
+              ...pinItem,
+              score: 1,
+              reason: "Ursprungs-Eintrag der Kampagne",
+            };
+            useCampaignStore.getState().addToPool(c.itemRef.service, [pinnedItem]);
           }
         }
 
@@ -97,7 +96,7 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
         useCampaignStore.getState().setLoading(false);
       }
     })();
-  }, [campaignId]);
+  }, [campaignId, apiKey]);
 
   if (loading || !campaign) {
     return (

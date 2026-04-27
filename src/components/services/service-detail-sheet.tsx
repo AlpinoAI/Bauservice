@@ -13,7 +13,7 @@ import type {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { KategorienBadges } from "@/components/services/kategorien-badges";
-import { betragOf, formatCurrency } from "@/lib/format";
+import { betragOf, formatCurrency, formatDate } from "@/lib/format";
 import { konzessionenTypItToDe, serviceLabels } from "@/lib/filter-options";
 
 type Props = {
@@ -79,7 +79,7 @@ export function ServiceDetailSheet({
             <div className="mb-1 flex flex-wrap items-center gap-2">
               <Badge variant="blue">{serviceLabels[item.service]}</Badge>
               {item.datum && (
-                <span className="text-xs text-zinc-500">{item.datum}</span>
+                <span className="text-xs text-zinc-500">{formatDate(item.datum)}</span>
               )}
               {item.bezirk && <Badge variant="neutral">{item.bezirk}</Badge>}
             </div>
