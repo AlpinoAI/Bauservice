@@ -5,6 +5,7 @@ import { UserPlus } from "lucide-react";
 import type { Campaign, Example, WithScore } from "@/lib/types";
 import { useCampaignStore } from "@/lib/campaign-store";
 import { searchContacts } from "@/lib/contacts-client";
+import { getItemById } from "@/lib/items-client";
 import { useApiKey } from "@/lib/use-api-key";
 import { buildDraftForRecipient } from "@/lib/build-draft-for-recipient";
 import { useAutoRender } from "@/lib/use-auto-render";
@@ -66,22 +67,18 @@ export function ReviewScreen({ campaignId }: { campaignId: string }) {
 
         let pinnedItem: WithScore<Example> | undefined;
         if (c.origin === "item" && c.itemRef) {
-          const piRes = await fetch(
-            `/api/dummy/sql/items?service=${c.itemRef.service}&limit=100`
+          const pinItem = await getItemById(
+            c.itemRef.service,
+            c.itemRef.itemId,
+            apiKey
           );
-          if (piRes.ok) {
-            const piData = (await piRes.json()) as { items: Example[] };
-            const pinItem = piData.items.find(
-              (x) => x.id === c.itemRef!.itemId
-            );
-            if (pinItem) {
-              pinnedItem = {
-                ...pinItem,
-                score: 1,
-                reason: "Ursprungs-Eintrag der Kampagne",
-              };
-              useCampaignStore.getState().addToPool(c.itemRef.service, [pinnedItem]);
-            }
+          if (pinItem) {
+            pinnedItem = {
+              ...pinItem,
+              score: 1,
+              reason: "Ursprungs-Eintrag der Kampagne",
+            };
+            useCampaignStore.getState().addToPool(c.itemRef.service, [pinnedItem]);
           }
         }
 

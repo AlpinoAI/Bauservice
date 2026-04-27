@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, List, Rows3, X } from "lucide-react";
 import type { Example, Service, WithScore } from "@/lib/types";
 import { useCampaignStore } from "@/lib/campaign-store";
+import { formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScoreBar } from "@/components/ui/score-bar";
@@ -161,7 +162,7 @@ export function ExampleSwapSheet({
                   >
                     <div className="mb-1 flex flex-wrap items-center gap-2">
                       {it.datum && (
-                        <span className="text-xs text-zinc-500">{it.datum}</span>
+                        <span className="text-xs text-zinc-500">{formatDate(it.datum)}</span>
                       )}
                       {it.bezirk && <Badge variant="neutral">{it.bezirk}</Badge>}
                       {it.gewerk && <Badge variant="blue">{it.gewerk}</Badge>}
