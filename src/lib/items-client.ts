@@ -23,12 +23,19 @@ const bezirkDeToIt: Record<string, string> = Object.fromEntries(
 const toBezirkDe = (it: string | undefined): string | undefined =>
   it ? bezirkItToDe[it] ?? it : undefined;
 
-// Bezirk-Spaltenname unterscheidet sich pro Service.
-const bezirkColumn: Record<ItemEndpoint, string> = {
-  tenders: "Bezirk",
-  results: "Bezirk",
-  projects: "Bezirk",
-  concessions: "Bezirke_BezeichnungI",
+// Pro Service unterschiedliche DB-Spaltennamen für die Filter.
+//   - bezirk: VectorDB_Ausschreibungen.Bezirk vs. VectorDB_Konzessionen.Bezirke_BezeichnungI
+//   - q (Suche): Beschreibung_D / BeschreibungD / conz_desc_d (uneinheitliches Schema)
+//   - jahr:     Datum (Erstellung) — bei Ergebnissen Datum_Zuschlag (Vergabedatum)
+// Gewerk hat in keinem der vier Quellen-Tabellen eine direkte Spalte (gehört in
+// VectorDB_Oberkategorie_Unterkategorie und müsste per JOIN reingezogen werden).
+// Solange der Endpoint das nicht liefert, wird der Filter unten ignoriert.
+type FilterFields = { bezirk: string; q: string; jahr: string };
+const filterColumns: Record<ItemEndpoint, FilterFields> = {
+  tenders:     { bezirk: "Bezirk",                q: "Beschreibung_D", jahr: "Datum" },
+  results:     { bezirk: "Bezirk",                q: "Beschreibung_D", jahr: "Datum_Zuschlag" },
+  projects:    { bezirk: "Bezirk",                q: "BeschreibungD",  jahr: "Datum" },
+  concessions: { bezirk: "Bezirke_BezeichnungI",  q: "conz_desc_d",    jahr: "Datum" },
 };
 
 const str = (v: unknown): string | undefined => {
@@ -133,18 +140,21 @@ function buildFilters(
   params: ItemSearchParams,
   endpoint: ItemEndpoint
 ): Filter[] {
-  const { q, bezirk, gewerk, jahr } = params;
+  const { q, bezirk, gewerk: _gewerk, jahr } = params;
+  const cols = filterColumns[endpoint];
   const filters: Filter[] = [];
-  if (q) filters.push({ field: "beschreibung_de", op: "contains", value: q });
+  if (q) filters.push({ field: cols.q, op: "contains", value: q });
   if (bezirk) {
     filters.push({
-      field: bezirkColumn[endpoint],
+      field: cols.bezirk,
       op: "eq",
       value: bezirkDeToIt[bezirk] ?? bezirk,
     });
   }
-  if (gewerk) filters.push({ field: "gewerk", op: "eq", value: gewerk });
-  if (jahr) filters.push({ field: "datum", op: "contains", value: jahr });
+  // TODO(matthias): Gewerk-Filter braucht Backend-Support (JOIN auf
+  // VectorDB_Oberkategorie_Unterkategorie). Bis dahin senden wir ihn nicht
+  // mit, damit andere aktive Filter nicht durch ein Backend-400 leerlaufen.
+  if (jahr) filters.push({ field: cols.jahr, op: "contains", value: jahr });
   return filters;
 }
 
