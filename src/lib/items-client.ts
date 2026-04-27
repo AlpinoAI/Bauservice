@@ -6,12 +6,30 @@ import type {
   KonzessionExample,
   Service,
 } from "./types";
+import { bezirkItToDe } from "./filter-options";
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:5001";
 
 type DbRow = Record<string, unknown>;
 type Filter = { field: string; op: "eq" | "contains"; value: string | number };
+type ItemEndpoint = "tenders" | "results" | "projects" | "concessions";
+
+// DB liefert Bezirke italienisch — UI zeigt deutsch. Inverse Map für Filter,
+// damit Dropdown-Wert (DE) wieder zum DB-Wert (IT) wird.
+const bezirkDeToIt: Record<string, string> = Object.fromEntries(
+  Object.entries(bezirkItToDe).map(([it, de]) => [de, it])
+);
+const toBezirkDe = (it: string | undefined): string | undefined =>
+  it ? bezirkItToDe[it] ?? it : undefined;
+
+// Bezirk-Spaltenname unterscheidet sich pro Service.
+const bezirkColumn: Record<ItemEndpoint, string> = {
+  tenders: "Bezirk",
+  results: "Bezirk",
+  projects: "Bezirk",
+  concessions: "Bezirke_BezeichnungI",
+};
 
 const str = (v: unknown): string | undefined => {
   if (typeof v !== "string") return undefined;
@@ -32,7 +50,7 @@ function mapTender(row: DbRow): AusschreibungExample {
     id: num(row.AusschreibungenID) ?? 0,
     service: "ausschreibungen",
     datum: str(row.Datum),
-    bezirk: str(row.Bezirk),
+    bezirk: toBezirkDe(str(row.Bezirk)),
     beschreibungDe: str(row.Beschreibung_D) ?? "",
     beschreibungIt: str(row.Beschreibung_I) ?? "",
     quelle: { table: "VectorDB_Ausschreibungen", pk: "AusschreibungenID" },
@@ -51,7 +69,7 @@ function mapResult(row: DbRow): ErgebnisExample {
     id: num(row.AusschreibungenID) ?? 0,
     service: "ergebnisse",
     datum: str(row.Datum_Zuschlag) ?? str(row.Datum),
-    bezirk: str(row.Bezirk),
+    bezirk: toBezirkDe(str(row.Bezirk)),
     beschreibungDe: str(row.Beschreibung_D) ?? "",
     beschreibungIt: str(row.Beschreibung_I) ?? "",
     quelle: { table: "VectorDB_Ausschreibungen", pk: "AusschreibungenID" },
@@ -70,7 +88,7 @@ function mapProject(row: DbRow): BeschlussExample {
     id: num(row.ProjektierungenId) ?? 0,
     service: "beschluesse",
     datum: str(row.Datum),
-    bezirk: str(row.Bezirk),
+    bezirk: toBezirkDe(str(row.Bezirk)),
     beschreibungDe: str(row.BeschreibungD) ?? "",
     beschreibungIt: str(row.BeschreibungI) ?? "",
     quelle: { table: "VectorDB_Projektierungen", pk: "ProjektierungenId" },
@@ -86,11 +104,13 @@ function mapConcession(row: DbRow): KonzessionExample {
     id: num(row.KonzessionenID) ?? 0,
     service: "baukonzessionen",
     datum: str(row.Datum),
-    bezirk: str(row.Bezirke_BezeichnungI),
+    bezirk: toBezirkDe(str(row.Bezirke_BezeichnungI)),
     beschreibungDe: str(row.conz_desc_d) ?? "",
     beschreibungIt: str(row.conz_desc_i) ?? "",
     quelle: { table: "VectorDB_Konzessionen", pk: "KonzessionenID" },
-    gemeinde: str(row.Gemeinde),
+    // `Gemeinde` ist italienisch ("Valle Aurina (BZ)"), `Ort` ist deutsch
+    // ("Ahrntal"). UI zeigt deutsch — daher DE-zuerst, IT als Fallback.
+    gemeinde: str(row.Ort) ?? str(row.Gemeinde),
     konzessionenTyp: str(row.KonzessionenTyp),
     konzessionenTypvariante: str(row.KonzessionenTypvariante),
     name: str(row.Name),
@@ -109,18 +129,27 @@ export type ItemSearchParams = {
   limit?: number;
 };
 
-function buildFilters(params: ItemSearchParams): Filter[] {
+function buildFilters(
+  params: ItemSearchParams,
+  endpoint: ItemEndpoint
+): Filter[] {
   const { q, bezirk, gewerk, jahr } = params;
   const filters: Filter[] = [];
   if (q) filters.push({ field: "beschreibung_de", op: "contains", value: q });
-  if (bezirk) filters.push({ field: "bezirk", op: "eq", value: bezirk });
+  if (bezirk) {
+    filters.push({
+      field: bezirkColumn[endpoint],
+      op: "eq",
+      value: bezirkDeToIt[bezirk] ?? bezirk,
+    });
+  }
   if (gewerk) filters.push({ field: "gewerk", op: "eq", value: gewerk });
   if (jahr) filters.push({ field: "datum", op: "contains", value: jahr });
   return filters;
 }
 
 async function searchItems<T extends Example>(
-  endpoint: string,
+  endpoint: ItemEndpoint,
   params: ItemSearchParams,
   apiKey: string,
   mapRow: (row: DbRow) => T,
@@ -134,7 +163,7 @@ async function searchItems<T extends Example>(
         "Content-Type": "application/json",
         "X-API-Key": apiKey,
       },
-      body: JSON.stringify({ filters: buildFilters(params), page, page_size: limit }),
+      body: JSON.stringify({ filters: buildFilters(params, endpoint), page, page_size: limit }),
       signal,
     });
     if (!res.ok) return { items: [], total: 0 };
@@ -181,7 +210,7 @@ export function searchConcessions(
 // ID-Lookup für ein einzelnes Item (für Pinned-Item im Item-Flow). Nutzt den
 // bestehenden /search-Endpoint mit einem eq-Filter auf das DB-spezifische
 // ID-Feld — solange Matthias keinen dedizierten /by-id-Endpoint liefert.
-const idFieldByService: Record<Service, { endpoint: string; field: string }> = {
+const idFieldByService: Record<Service, { endpoint: ItemEndpoint; field: string }> = {
   ausschreibungen: { endpoint: "tenders", field: "AusschreibungenID" },
   ergebnisse: { endpoint: "results", field: "AusschreibungenID" },
   beschluesse: { endpoint: "projects", field: "ProjektierungenId" },
