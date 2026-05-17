@@ -38,6 +38,10 @@ export function LoginForm() {
       onSubmit={onSubmit}
       className="w-full max-w-sm rounded-lg border border-zinc-200 bg-white p-6 shadow-sm"
     >
+      <div className="mb-4 flex justify-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.png" alt="Bauservice Logo" width={60} height={90} />
+      </div>
       <h1 className="text-lg font-semibold">Bauservice Email-Automation</h1>
       <p className="mt-1 text-sm text-zinc-600">
         Zugang nur für Bauservice-Mitarbeiter.

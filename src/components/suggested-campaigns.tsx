@@ -9,17 +9,24 @@ import { serviceLabels } from "@/lib/filter-options";
 import { scenarios } from "@/lib/scenarios";
 import { useStartCampaign } from "@/lib/use-start-campaign";
 import type { Suggestion } from "@/lib/suggestions";
+import { useApiKey } from "@/lib/use-api-key";
 
 export function SuggestedCampaigns() {
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
   const { start, startingId } = useStartCampaign();
+  const apiKey = useApiKey();
 
   useEffect(() => {
-    fetch("/api/dummy/sql/suggestions?limit=6")
+    if (!apiKey) return;
+
+    fetch("http://localhost:5001/bauservice/email/suggest?limit=6", {
+      method: 'POST',
+      headers: { "X-API-Key": apiKey },
+    })
       .then((r) => r.json())
       .then((d) => setSuggestions(d.suggestions ?? []))
       .catch(() => setSuggestions([]));
-  }, []);
+  }, [apiKey]);
 
   function startFrom(s: Suggestion) {
     const name = `Vorschlag · ${s.recipient.nameDe} · ${serviceLabels[s.item.service]}`;

@@ -26,9 +26,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen">
       <aside className="flex w-56 shrink-0 flex-col border-r border-zinc-200 bg-white">
         <div className="flex items-center gap-3 border-b border-zinc-100 px-5 py-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-sm font-bold text-white">
-            BS
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Bauservice Logo" width={36} height={54} className="shrink-0" />
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-zinc-900">
               Bauservice
